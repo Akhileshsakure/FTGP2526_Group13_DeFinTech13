@@ -2,7 +2,7 @@
 SEMTM0029: Financial Technology Group Project - Group 13
 # 📦 DeFi Lending Protocol 
 
-A simplified decentralized lending protocol inspired by Compound.  
+A simplified decentralized lending protocol 
 This project demonstrates core DeFi mechanics including asset supply, borrowing, interest accrual, risk management, and price oracle integration.
 
 ---
