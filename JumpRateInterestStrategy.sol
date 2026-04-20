@@ -11,21 +11,21 @@ interface IInterestRateStrategyLike {
 
 /**
  * @title JumpRateInterestStrategy
- * @notice Compound 风格跳变利率模型（按秒计息）
+ * @notice jump interest rate（charge in seconds）
  *
- * 利率模型：
+ * interest rate model：
  *
  * utilization = totalBorrows / (cash + totalBorrows - totalReserves)
  *
- * 当 utilization <= kink:
+ * when utilization <= kink:
  *   borrowRate = baseRatePerSecond + utilization * multiplierPerSecond
  *
- * 当 utilization > kink:
+ * when utilization > kink:
  *   normalRate = baseRatePerSecond + kink * multiplierPerSecond
  *   excessUtil = utilization - kink
  *   borrowRate = normalRate + excessUtil * jumpMultiplierPerSecond
  *
- * 全部参数统一使用 1e18 精度
+ * 
  */
 contract JumpRateInterestStrategy is IInterestRateStrategyLike {
     uint256 public constant WAD = 1e18;
@@ -33,7 +33,7 @@ contract JumpRateInterestStrategy is IInterestRateStrategyLike {
 
     address public owner;
 
-    // 年化参数（1e18 精度）
+    // annual default value (1e18)
     uint256 public baseRatePerYear;
     uint256 public multiplierPerYear;
     uint256 public jumpMultiplierPerYear;
@@ -113,7 +113,7 @@ contract JumpRateInterestStrategy is IInterestRateStrategyLike {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice 当前利用率，1e18 精度
+     * @notice get currently interest rate，1e18 
      * @dev utilization = borrows / (cash + borrows - reserves)
      */
     function utilizationRate(
@@ -146,7 +146,7 @@ contract JumpRateInterestStrategy is IInterestRateStrategyLike {
     }
 
     /**
-     * @notice 返回当前借款利率（每秒，1e18 精度）
+     * @notice return currently interest rate（/seconds，1e18 ）
      */
     function getBorrowRate(
         uint256 cash,
