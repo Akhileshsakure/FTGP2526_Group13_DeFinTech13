@@ -1,17 +1,31 @@
 import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
+import hardhatViem from "@nomicfoundation/hardhat-viem";
+import hardhatViemAssertions from "@nomicfoundation/hardhat-viem-assertions";
 import { configVariable, defineConfig } from "hardhat/config";
 
 export default defineConfig({
-  plugins: [hardhatToolboxMochaEthersPlugin],
+  plugins: [
+    hardhatToolboxMochaEthersPlugin,
+    hardhatViem,
+    hardhatViemAssertions,
+  ],
 
   paths: {
-    sources: "./contracts",   
+    sources: "./contracts",
+    tests: "./test",
   },
 
   solidity: {
     profiles: {
       default: {
         version: "0.8.28",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 50,
+          },
+          viaIR: true,
+        },
       },
       production: {
         version: "0.8.28",
@@ -20,6 +34,7 @@ export default defineConfig({
             enabled: true,
             runs: 50,
           },
+          viaIR: true,
         },
       },
     },
