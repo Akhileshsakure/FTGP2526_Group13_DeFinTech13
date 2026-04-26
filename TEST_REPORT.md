@@ -1,10 +1,10 @@
-Smart Contract Test Report
-1. Test Objective
+# Smart Contract Test Report
+## 1. Test Objective
 The purpose of this test suite is to verify the correctness and security of the DeFi lending protocol smart contracts.
 
 The tests cover both normal user flows and security-related edge cases, including lending, borrowing, repayment, redemption, liquidation, market risk controls, access control, oracle safety, and invalid input handling.
 
-2. Test Environment
+## 2. Test Environment
 The tests were executed using Hardhat on a local simulated blockchain network.
 
 Command Used
@@ -15,7 +15,7 @@ hardhat test
 The raw test output is saved in:
 
 test-results/hardhat-test-results.txt
-3. Test Result Summary
+## 3. Test Result Summary
 All tests passed successfully.
 
 Category	Result
@@ -26,7 +26,7 @@ Skipped tests	0
 Cancelled tests	0
 This confirms that the tested smart contract behaviours worked as expected in the local Hardhat test environment.
 
-4. Test Files
+## 4. Test Files
 The following test files were included:
 
 Test File	Purpose
@@ -36,7 +36,7 @@ test/CEthFlow.ts	Tests the basic ETH supply, borrow and repay flow
 test/Counter.ts	Tests event emission and state updates for the sample Counter contract
 test/MoreFlows.ts	Tests redeem flow, ERC20 lending flow, repayment and liquidation
 test/SecurityEdgeCases.ts	Tests access control, zero amount rejection, oracle edge cases and invalid router address handling
-5. Functional Test Coverage
+## 5. Functional Test Coverage
 Core Lending Flows
 The tests verify the main protocol operations:
 
@@ -74,7 +74,7 @@ The liquidator receives seized collateral
 The borrower's debt decreases
 This confirms that liquidation works as intended when a position becomes unsafe.
 
-6. Security and Edge-Case Coverage
+## 6. Security and Edge-Case Coverage
 Additional security-focused tests were added in test/SecurityEdgeCases.ts.
 
 These tests cover:
@@ -94,13 +94,13 @@ Oracle safety
 Collateral protection
 Risk management
 Prevention of unsafe state transitions
-7. Raw Test Output
+## 7. Raw Test Output
 The full raw test output is saved in:
 
 test-results/hardhat-test-results.txt
 This file contains the complete terminal output from the Hardhat test run.
 
-8. Notes
+## 8. Notes
 During testing, Hardhat displayed the following warning:
 
 hre.network.connect() is deprecated and will be removed in a future version.
