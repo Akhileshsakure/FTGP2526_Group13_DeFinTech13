@@ -15,32 +15,28 @@ interface ICTokenLike {
     function balanceOf(address owner) external view returns (uint256);
     function borrowBalanceStored(address account) external view returns (uint256);
     function exchangeRateStored() external view returns (uint256);
+    function totalSupply() external view returns (uint256);
+    function totalBorrows() external view returns (uint256);
 }
 
 interface IPriceOracle {
     /**
-     * @notice Returns the price of the underlying asset for the given cToken, scaled by 1e18
-     * @dev For example, if the underlying is ETH, price = 3000e18 (denominated in USD)
+     * Code comment
      */
     function getUnderlyingPrice(address cToken) external view returns (uint256);
 }
 
 /**
- * @title Comptroller
- * @notice Unified liquidity controller for multiple markets
+ * @title Comptroller (Risk Manager)
+ * @notice Aave-style multi-market liquidity and risk controller
  *
- * Responsibilities:
- * - Manage market listings
- * - Manage which collateral markets a user has entered
- * - Calculate account liquidity / shortfall across markets
- * - Provide allow / verify risk-control hooks for each CToken
- * - Provide seize amount calculations for liquidations
- *
- * Not responsible for:
- * - Asset transfers
- * - Interest accrual
- * - Liquidation execution
- * - Leverage routing execution
+ * Code comment
+ * Code comment
+ * Code comment
+ * Code comment
+ * Code comment
+ * Code comment
+ * Code comment
  */
 contract Comptroller {
     /*//////////////////////////////////////////////////////////////
@@ -50,7 +46,7 @@ contract Comptroller {
     uint256 public constant WAD = 1e18;
     uint256 public constant NO_ERROR = 0;
 
-    // Error codes (can be refactored into an enum later)
+    // Error codes
     uint256 public constant MARKET_NOT_LISTED = 1;
     uint256 public constant MARKET_ALREADY_LISTED = 2;
     uint256 public constant INSUFFICIENT_LIQUIDITY = 3;
@@ -60,9 +56,11 @@ contract Comptroller {
     uint256 public constant ACCOUNT_NOT_ENTERED_MARKET = 7;
     uint256 public constant NONZERO_BORROW_BALANCE = 8;
     uint256 public constant EXIT_MARKET_REJECTED = 9;
+    uint256 public constant SUPPLY_CAP_EXCEEDED = 10;
+    uint256 public constant BORROW_CAP_EXCEEDED = 11;
 
     /*//////////////////////////////////////////////////////////////
-                                  ADMIN
+                               ADMIN
     //////////////////////////////////////////////////////////////*/
 
     address public admin;
@@ -78,8 +76,12 @@ contract Comptroller {
     //////////////////////////////////////////////////////////////*/
 
     struct Market {
-        bool isListed;
-        uint256 collateralFactorMantissa; // 1e18
+        bool isListed; // Whether listed
+        uint256 ltvMantissa; // Max LTV
+        uint256 liquidationThresholdMantissa; // Liquidation threshold
+        uint256 liquidationBonusMantissa; // Liquidation bonus (e.g. 1.05e18 for 5%)
+        uint256 supplyCap; // Supply cap
+        uint256 borrowCap; // Borrow cap
     }
 
     struct LiquidityParams {
@@ -88,31 +90,32 @@ contract Comptroller {
         uint256 borrowAmount;
     }
 
-    // cToken => market config
+    // cToken => Market config
     mapping(address => Market) public markets;
 
-    // Whether a user has entered a market as collateral
+    // cToken => Is market paused
+    mapping(address => bool) public isMarketPaused;
+
+    // User market membership
     mapping(address => mapping(address => bool)) public accountMembership;
 
-    // All markets entered by a user
+    // User entered markets
     mapping(address => address[]) public accountAssets;
 
     // All listed markets
     address[] public allMarkets;
 
-    // Global price oracle
+    // Code comment
     IPriceOracle public oracle;
 
-    // Close factor: maximum portion of debt that can be repaid in a single liquidation
+    // Close factor: max percentage of borrow that can be repaid in one liquidation
     uint256 public closeFactorMantissa;
-
-    // Liquidation incentive, e.g. 1.08e18
-    uint256 public liquidationIncentiveMantissa;
 
     // Approved leverage routers
     mapping(address => bool) public approvedRouters;
+
     /*//////////////////////////////////////////////////////////////
-                                  EVENTS
+                                 EVENTS
     //////////////////////////////////////////////////////////////*/
 
     event NewPendingAdmin(address oldPendingAdmin, address newPendingAdmin);
@@ -121,35 +124,45 @@ contract Comptroller {
     event MarketListed(address cToken);
     event MarketEntered(address cToken, address account);
     event MarketExited(address cToken, address account);
+    event MarketPaused(address cToken, bool isPaused);
 
     event NewPriceOracle(address oldOracle, address newOracle);
-    event NewCollateralFactor(address cToken, uint256 oldCollateralFactor, uint256 newCollateralFactor);
     event NewCloseFactor(uint256 oldCloseFactorMantissa, uint256 newCloseFactorMantissa);
-    event NewLiquidationIncentive(uint256 oldLiquidationIncentiveMantissa, uint256 newLiquidationIncentiveMantissa);
     event RouterUpdated(address indexed router, bool approved);
+
+    event MarketRiskParametersUpdated(
+        address cToken, 
+        uint256 ltv, 
+        uint256 liquidationThreshold, 
+        uint256 liquidationBonus
+    );
+
+    event MarketCapsUpdated(
+        address cToken,
+        uint256 supplyCap,
+        uint256 borrowCap
+    );
+
     /*//////////////////////////////////////////////////////////////
-                               CONSTRUCTOR
+                                CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
     constructor(
         address admin_,
         IPriceOracle oracle_,
-        uint256 closeFactorMantissa_,
-        uint256 liquidationIncentiveMantissa_
+        uint256 closeFactorMantissa_
     ) {
         require(admin_ != address(0), "bad admin");
         require(address(oracle_) != address(0), "bad oracle");
         require(closeFactorMantissa_ <= WAD, "bad close factor");
-        require(liquidationIncentiveMantissa_ >= WAD, "bad liq incentive");
 
         admin = admin_;
         oracle = oracle_;
         closeFactorMantissa = closeFactorMantissa_;
-        liquidationIncentiveMantissa = liquidationIncentiveMantissa_;
     }
 
     /*//////////////////////////////////////////////////////////////
-                              ADMIN FUNCTIONS
+                              ADMIN功能
     //////////////////////////////////////////////////////////////*/
 
     function _setPendingAdmin(address newPendingAdmin) external onlyAdmin returns (uint256) {
@@ -184,41 +197,91 @@ contract Comptroller {
         return NO_ERROR;
     }
 
-    function _supportMarket(address cToken, uint256 collateralFactorMantissa) external onlyAdmin returns (uint256) {
+    /**
+     * @notice Support new market and set Aave risk parameters
+     */
+    function _supportMarket(
+        address cToken, 
+        uint256 ltvMantissa,
+        uint256 liquidationThresholdMantissa,
+        uint256 liquidationBonusMantissa
+    ) external onlyAdmin returns (uint256) {
         require(cToken != address(0), "bad market");
         require(!markets[cToken].isListed, "already listed");
-        require(collateralFactorMantissa <= WAD, "bad collateral factor");
+        require(ltvMantissa <= liquidationThresholdMantissa, "LTV must be <= Liq Threshold");
+        require(liquidationThresholdMantissa <= WAD, "Liq Threshold > WAD");
+        require(liquidationBonusMantissa >= WAD, "Liq Bonus < WAD");
 
-        // Require the oracle to provide a valid price before listing the market
         uint256 price = oracle.getUnderlyingPrice(cToken);
         require(price > 0, "price not available");
 
         markets[cToken] = Market({
             isListed: true,
-            collateralFactorMantissa: collateralFactorMantissa
+            ltvMantissa: ltvMantissa,
+            liquidationThresholdMantissa: liquidationThresholdMantissa,
+            liquidationBonusMantissa: liquidationBonusMantissa,
+            supplyCap: type(uint256).max,
+            borrowCap: type(uint256).max
         });
 
         allMarkets.push(cToken);
 
         emit MarketListed(cToken);
-        emit NewCollateralFactor(cToken, 0, collateralFactorMantissa);
+        emit MarketRiskParametersUpdated(cToken, ltvMantissa, liquidationThresholdMantissa, liquidationBonusMantissa);
 
         return NO_ERROR;
     }
 
-    function _setCollateralFactor(address cToken, uint256 newCollateralFactorMantissa)
-        external
-        onlyAdmin
-        returns (uint256)
-    {
+    /**
+     * @notice Dynamically adjust market risk parameters
+     */
+    function _setMarketRiskParameters(
+        address cToken,
+        uint256 ltvMantissa,
+        uint256 liquidationThresholdMantissa,
+        uint256 liquidationBonusMantissa
+    ) external onlyAdmin returns (uint256) {
         require(markets[cToken].isListed, "market not listed");
-        require(newCollateralFactorMantissa <= WAD, "bad collateral factor");
+        require(ltvMantissa <= liquidationThresholdMantissa, "LTV must be <= Liq Threshold");
+        require(liquidationThresholdMantissa <= WAD, "Liq Threshold > WAD");
+        require(liquidationBonusMantissa >= WAD, "Liq Bonus < WAD");
         require(oracle.getUnderlyingPrice(cToken) > 0, "price not available");
 
-        uint256 oldCollateralFactor = markets[cToken].collateralFactorMantissa;
-        markets[cToken].collateralFactorMantissa = newCollateralFactorMantissa;
+        markets[cToken].ltvMantissa = ltvMantissa;
+        markets[cToken].liquidationThresholdMantissa = liquidationThresholdMantissa;
+        markets[cToken].liquidationBonusMantissa = liquidationBonusMantissa;
 
-        emit NewCollateralFactor(cToken, oldCollateralFactor, newCollateralFactorMantissa);
+        emit MarketRiskParametersUpdated(cToken, ltvMantissa, liquidationThresholdMantissa, liquidationBonusMantissa);
+        return NO_ERROR;
+    }
+
+    /**
+     * @notice Set asset caps (supply and borrow)
+     */
+    function _setMarketCaps(
+        address cToken,
+        uint256 supplyCap,
+        uint256 borrowCap
+    ) external onlyAdmin returns (uint256) {
+        require(markets[cToken].isListed, "market not listed");
+
+        markets[cToken].supplyCap = supplyCap;
+        markets[cToken].borrowCap = borrowCap;
+
+        emit MarketCapsUpdated(cToken, supplyCap, borrowCap);
+        return NO_ERROR;
+    }
+
+    /**
+     * @notice Emergency pause: pause or resume all core operations of a market
+     * @param cToken market token address
+     * @param state true for pause, false for resume
+     */
+    function _setMarketPause(address cToken, bool state) external onlyAdmin returns (uint256) {
+        require(markets[cToken].isListed, "market not listed");
+        isMarketPaused[cToken] = state;
+        
+        emit MarketPaused(cToken, state);
         return NO_ERROR;
     }
 
@@ -232,19 +295,6 @@ contract Comptroller {
         return NO_ERROR;
     }
 
-    function _setLiquidationIncentive(uint256 newLiquidationIncentiveMantissa)
-        external
-        onlyAdmin
-        returns (uint256)
-    {
-        require(newLiquidationIncentiveMantissa >= WAD, "bad liq incentive");
-
-        uint256 old = liquidationIncentiveMantissa;
-        liquidationIncentiveMantissa = newLiquidationIncentiveMantissa;
-
-        emit NewLiquidationIncentive(old, newLiquidationIncentiveMantissa);
-        return NO_ERROR;
-    }
     function setRouter(address router, bool approved) external onlyAdmin returns (uint256) {
         require(router != address(0), "bad router");
         approvedRouters[router] = approved;
@@ -252,22 +302,8 @@ contract Comptroller {
         return NO_ERROR;
     }
 
-    function enterMarketsFor(address account, address[] calldata cTokens)
-        external
-        returns (uint256[] memory results)
-    {
-        require(approvedRouters[msg.sender], "not approved router");
-        require(account != address(0), "bad account");
-
-        uint256 len = cTokens.length;
-        results = new uint256[](len);
-
-        for (uint256 i = 0; i < len; i++) {
-            results[i] = _addToMarketInternal(cTokens[i], account);
-        }
-    }
     /*//////////////////////////////////////////////////////////////
-                           MARKET MEMBERSHIP
+                             MARKET MEMBERSHIP
     //////////////////////////////////////////////////////////////*/
 
     function getAllMarkets() external view returns (address[] memory) {
@@ -282,12 +318,30 @@ contract Comptroller {
         return accountMembership[account][cToken];
     }
 
+    /**
+     * @notice Allow user to use specified asset as collateral
+     */
     function enterMarkets(address[] calldata cTokens) external returns (uint256[] memory results) {
         uint256 len = cTokens.length;
         results = new uint256[](len);
 
         for (uint256 i = 0; i < len; i++) {
             results[i] = _addToMarketInternal(cTokens[i], msg.sender);
+        }
+    }
+
+    function enterMarketsFor(address account, address[] calldata cTokens)
+        external
+        returns (uint256[] memory results)
+    {
+        require(approvedRouters[msg.sender], "not approved router");
+        require(account != address(0), "bad account");
+
+        uint256 len = cTokens.length;
+        results = new uint256[](len);
+
+        for (uint256 i = 0; i < len; i++) {
+            results[i] = _addToMarketInternal(cTokens[i], account);
         }
     }
 
@@ -307,6 +361,9 @@ contract Comptroller {
         return NO_ERROR;
     }
 
+    /**
+     * @notice Exit market: no longer use asset as collateral
+     */
     function exitMarket(address cToken) external returns (uint256) {
         if (!markets[cToken].isListed) {
             return MARKET_NOT_LISTED;
@@ -316,13 +373,13 @@ contract Comptroller {
             return NO_ERROR;
         }
 
-        // Cannot exit while there is still an outstanding borrow in this market
+        // Cannot exit if borrow balance > 0
         uint256 borrowBalance = ICTokenLike(cToken).borrowBalanceStored(msg.sender);
         if (borrowBalance > 0) {
             return NONZERO_BORROW_BALANCE;
         }
 
-        // Simulate whether the account remains healthy after removing all cTokens of this market from collateral
+        // Simulate account health if all cTokens are removed from collateral
         uint256 cTokenBalance = ICTokenLike(cToken).balanceOf(msg.sender);
         (uint256 err, , uint256 shortfall) = getHypotheticalAccountLiquidity(
             msg.sender,
@@ -335,11 +392,12 @@ contract Comptroller {
             return err;
         }
 
+        // Reject exit if it leads to shortfall
         if (shortfall > 0) {
             return EXIT_MARKET_REJECTED;
         }
 
-        // Remove membership
+        // Formally remove collateral membership
         accountMembership[msg.sender][cToken] = false;
 
         address[] storage assets = accountAssets[msg.sender];
@@ -360,15 +418,27 @@ contract Comptroller {
                               ALLOWED HOOKS
     //////////////////////////////////////////////////////////////*/
 
-    function mintAllowed(address cToken, address, uint256) external view returns (uint256) {
+    function mintAllowed(address cToken, address, uint256 mintAmount) external view returns (uint256) {
+        require(!isMarketPaused[cToken], "Market is paused");
         if (!markets[cToken].isListed) return MARKET_NOT_LISTED;
+
+        // Supply cap check
+        uint256 supplyCap = markets[cToken].supplyCap;
+        if (supplyCap != type(uint256).max) {
+            uint256 totalSupplyUnderlying = (ICTokenLike(cToken).totalSupply() * ICTokenLike(cToken).exchangeRateStored()) / WAD;
+            if (totalSupplyUnderlying + mintAmount > supplyCap) {
+                return SUPPLY_CAP_EXCEEDED;
+            }
+        }
+
         return NO_ERROR;
     }
 
     function redeemAllowed(address cToken, address redeemer, uint256 redeemTokens) external view returns (uint256) {
+        require(!isMarketPaused[cToken], "Market is paused");
         if (!markets[cToken].isListed) return MARKET_NOT_LISTED;
 
-        // If the market is not being used as collateral, redemption is always allowed
+        // Can redeem directly if not used as collateral
         if (!accountMembership[redeemer][cToken]) {
             return NO_ERROR;
         }
@@ -387,11 +457,18 @@ contract Comptroller {
     }
 
     function borrowAllowed(address cToken, address borrower, uint256 borrowAmount) external returns (uint256) {
+        require(!isMarketPaused[cToken], "Market is paused");
         if (!markets[cToken].isListed) return MARKET_NOT_LISTED;
 
-        // If the user has not entered this borrow market yet, automatically add membership
-        // Note: this does not mean the borrow market itself is used as collateral;
-        // it only records that the user has interacted with the market, similar to Compound
+        // Borrow cap check
+        uint256 borrowCap = markets[cToken].borrowCap;
+        if (borrowCap != type(uint256).max) {
+            uint256 totalBorrows = ICTokenLike(cToken).totalBorrows();
+            if (totalBorrows + borrowAmount > borrowCap) {
+                return BORROW_CAP_EXCEEDED;
+            }
+        }
+
         if (!accountMembership[borrower][cToken]) {
             uint256 addErr = _addToMarketInternal(cToken, borrower);
             if (addErr != NO_ERROR) return addErr;
@@ -411,6 +488,7 @@ contract Comptroller {
     }
 
     function repayBorrowAllowed(address cToken, address, address, uint256) external view returns (uint256) {
+        require(!isMarketPaused[cToken], "Market is paused");
         if (!markets[cToken].isListed) return MARKET_NOT_LISTED;
         return NO_ERROR;
     }
@@ -422,12 +500,16 @@ contract Comptroller {
         address borrower,
         uint256 repayAmount
     ) external view returns (uint256) {
+        require(!isMarketPaused[cTokenBorrowed] && !isMarketPaused[cTokenCollateral], "Market is paused");
         if (!markets[cTokenBorrowed].isListed || !markets[cTokenCollateral].isListed) {
             return MARKET_NOT_LISTED;
         }
 
-        (, uint256 liquidity, uint256 shortfall) = getAccountLiquidity(borrower);
-        if (shortfall == 0 || liquidity > 0) {
+        (uint256 err, uint256 hf) = getAccountHealthFactor(borrower);
+        if (err != NO_ERROR) return err;
+
+        // In Aave model, liquidation is allowed only when Health Factor < 1.0
+        if (hf >= WAD) {
             return INSUFFICIENT_SHORTFALL;
         }
 
@@ -447,6 +529,7 @@ contract Comptroller {
         address,
         uint256
     ) external view returns (uint256) {
+        require(!isMarketPaused[cTokenCollateral], "Market is paused");
         if (!markets[cTokenCollateral].isListed || !markets[cTokenBorrowed].isListed) {
             return MARKET_NOT_LISTED;
         }
@@ -454,13 +537,13 @@ contract Comptroller {
     }
 
     /*//////////////////////////////////////////////////////////////
-                           VERIFY HOOKS (OPTIONAL)
+                           OPTIONAL VERIFY HOOKS
     //////////////////////////////////////////////////////////////*/
 
     function redeemVerify(address, address, uint256, uint256) external pure {}
 
     /*//////////////////////////////////////////////////////////////
-                           LIQUIDITY CALCULATION
+                         LIQUIDITY & HEALTH FACTOR
     //////////////////////////////////////////////////////////////*/
 
     function getAccountLiquidity(address account)
@@ -476,8 +559,56 @@ contract Comptroller {
     }
 
     /**
-     * @notice Simulates account liquidity after redeeming `redeemTokens` cTokens from a market
-     *         and additionally borrowing `borrowAmount`
+     * @notice Aave style health factor calculation
+     * Health Factor = Sum(Collateral Value * Liquidation Threshold) / Sum(Borrow Value)
+     * If no borrows, returns max uint256
+     */
+    function getAccountHealthFactor(address account) public view returns (uint256 error, uint256 healthFactor) {
+        uint256 sumCollateralThresholdValue;
+        uint256 sumBorrowValue;
+
+        address[] storage assets = accountAssets[account];
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            address asset = assets[i];
+            Market memory market = markets[asset];
+            if (!market.isListed) {
+                return (MARKET_NOT_LISTED, 0);
+            }
+
+            (
+                uint256 oErr,
+                uint256 cTokenBalance,
+                uint256 borrowBalance,
+                uint256 exchangeRateMantissa
+            ) = ICTokenLike(asset).getAccountSnapshot(account);
+
+            if (oErr != NO_ERROR) {
+                return (oErr, 0);
+            }
+
+            uint256 oraclePriceMantissa = oracle.getUnderlyingPrice(asset);
+            if (oraclePriceMantissa == 0) {
+                return (PRICE_ERROR, 0);
+            }
+
+            uint256 tokensToUnderlying = (cTokenBalance * exchangeRateMantissa) / WAD;
+            uint256 underlyingToValue = (tokensToUnderlying * oraclePriceMantissa) / WAD;
+            
+            sumCollateralThresholdValue += (underlyingToValue * market.liquidationThresholdMantissa) / WAD;
+            sumBorrowValue += (borrowBalance * oraclePriceMantissa) / WAD;
+        }
+
+        if (sumBorrowValue == 0) {
+            return (NO_ERROR, type(uint256).max); // Zero borrows, infinite health factor
+        }
+
+        healthFactor = (sumCollateralThresholdValue * WAD) / sumBorrowValue;
+        return (NO_ERROR, healthFactor);
+    }
+
+    /**
+     * @notice Simulate account liquidity based on LTV
      */
     function getHypotheticalAccountLiquidity(
         address account,
@@ -493,7 +624,7 @@ contract Comptroller {
             uint256 shortfall
         )
     {
-        uint256 sumCollateral;
+        uint256 sumCollateralLtvValue;
         uint256 sumBorrowPlusEffects;
 
         LiquidityParams memory params = LiquidityParams({
@@ -512,14 +643,14 @@ contract Comptroller {
                 return (err, 0, 0);
             }
 
-            sumCollateral += collateralContribution;
+            sumCollateralLtvValue += collateralContribution;
             sumBorrowPlusEffects += borrowContribution;
         }
 
-        if (sumCollateral > sumBorrowPlusEffects) {
-            return (NO_ERROR, sumCollateral - sumBorrowPlusEffects, 0);
+        if (sumCollateralLtvValue > sumBorrowPlusEffects) {
+            return (NO_ERROR, sumCollateralLtvValue - sumBorrowPlusEffects, 0);
         } else {
-            return (NO_ERROR, 0, sumBorrowPlusEffects - sumCollateral);
+            return (NO_ERROR, 0, sumBorrowPlusEffects - sumCollateralLtvValue);
         }
     }
 
@@ -559,7 +690,9 @@ contract Comptroller {
 
         uint256 tokensToUnderlying = (cTokenBalance * exchangeRateMantissa) / WAD;
         uint256 underlyingToValue = (tokensToUnderlying * oraclePriceMantissa) / WAD;
-        collateralContribution = (underlyingToValue * market.collateralFactorMantissa) / WAD;
+        
+        // Note: Borrow limit is calculated using LTV, not Liquidation Threshold
+        collateralContribution = (underlyingToValue * market.ltvMantissa) / WAD;
 
         borrowContribution = (borrowBalance * oraclePriceMantissa) / WAD;
 
@@ -567,7 +700,7 @@ contract Comptroller {
             if (params.redeemTokens > 0) {
                 uint256 redeemUnderlying = (params.redeemTokens * exchangeRateMantissa) / WAD;
                 uint256 redeemValue = (redeemUnderlying * oraclePriceMantissa) / WAD;
-                uint256 redeemCollateralValue = (redeemValue * market.collateralFactorMantissa) / WAD;
+                uint256 redeemCollateralValue = (redeemValue * market.ltvMantissa) / WAD;
                 borrowContribution += redeemCollateralValue;
             }
 
@@ -581,15 +714,14 @@ contract Comptroller {
     }
 
     /*//////////////////////////////////////////////////////////////
-                         LIQUIDATION CALCULATION
+                              LIQUIDATION CALCULATION
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Calculates how many cTokenCollateral tokens a liquidator should receive
-     *         after repaying `actualRepayAmount`
+     * @notice Calculate how much cToken collateral the liquidator should receive after repaying actualRepayAmount
      *
-     * seizeAmount = actualRepayAmount * liquidationIncentive * priceBorrowed / priceCollateral
-     * seizeTokens = seizeAmount / exchangeRateCollateral
+     * Seized underlying value = Repaid underlying value * Liquidation bonus
+     * Seized cTokens = Seized underlying value / Exchange rate
      */
     function liquidateCalculateSeizeTokens(
         address cTokenBorrowed,
@@ -603,21 +735,23 @@ contract Comptroller {
             return (PRICE_ERROR, 0);
         }
 
+        Market memory collateralMarket = markets[cTokenCollateral];
+        if (!collateralMarket.isListed) {
+            return (MARKET_NOT_LISTED, 0);
+        }
+
         uint256 exchangeRateMantissa = ICTokenLike(cTokenCollateral).exchangeRateStored();
 
-        // seizeAmount in collateral underlying units:
-        // repay * liqIncentive * priceBorrowed / priceCollateral
-        uint256 numerator = (((actualRepayAmount * liquidationIncentiveMantissa) / WAD) * priceBorrowedMantissa);
+        uint256 numerator = (((actualRepayAmount * collateralMarket.liquidationBonusMantissa) / WAD) * priceBorrowedMantissa);
         uint256 seizeAmount = numerator / priceCollateralMantissa;
 
-        // seizeTokens = seizeAmount / exchangeRate
         seizeTokens = (seizeAmount * WAD) / exchangeRateMantissa;
 
         return (NO_ERROR, seizeTokens);
     }
 
     /*//////////////////////////////////////////////////////////////
-                              VIEW HELPERS
+                                VIEW HELPERS
     //////////////////////////////////////////////////////////////*/
 
     function isComptroller() external pure returns (bool) {
