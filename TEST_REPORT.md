@@ -106,7 +106,7 @@ During testing, Hardhat displayed the following warning:
 hre.network.connect() is deprecated and will be removed in a future version.
 This warning does not affect the test result. All tests passed successfully.
 
-9. Conclusion
+## 9. Conclusion
 The test suite demonstrates that the smart contracts correctly support the main DeFi lending workflow and enforce key security and risk-control rules.
 
 The protocol passed all tested scenarios, including normal lending flows, ERC20 and ETH operations, liquidation behaviour, market controls, access control, invalid input handling, oracle edge cases, and collateral safety checks.
