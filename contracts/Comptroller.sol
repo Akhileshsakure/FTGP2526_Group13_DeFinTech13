@@ -162,7 +162,7 @@ contract Comptroller {
     }
 
     /*//////////////////////////////////////////////////////////////
-                              ADMIN
+                              ADMIN功能
     //////////////////////////////////////////////////////////////*/
 
     function _setPendingAdmin(address newPendingAdmin) external onlyAdmin returns (uint256) {
