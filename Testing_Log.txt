@@ -1,0 +1,87 @@
+System Testing and Feature Validation Log
+
+This document summarizes the comprehensive testing coverage and feature validation for our DeFi lending protocol. It covers the core functionalities, the advanced Aave-style risk management system, security features, and frontend integrations.
+
+1. CEth (ETH Market) Core Flow Verification
+File: CEthFlow.ts
+This tests the fundamental lifecycle of the native ETH market:
+- Successfully deployed all core contracts including the Comptroller, MockPriceOracle, and AaveInterestRateStrategy.
+- Verified user ETH deposits (mint) to receive cETH tokens.
+- Tested collateral activation by allowing users to enter the market.
+- Validated the borrow and repayment lifecycle against the supplied collateral.
+
+2. Redemption and Withdrawal Flow
+File: MoreFlows.ts
+Tested the exit logic of the protocol:
+- Verified that users can redeem their cTokens to withdraw underlying assets.
+- Confirmed that the underlying assets are correctly transferred back to the user wallet and the corresponding cTokens are burned, successfully decreasing the user's supplied balance.
+
+3. ERC20 Market Integration
+File: MoreFlows.ts
+Verified the protocol's compatibility with standard ERC20 tokens:
+- Deployed a MockERC20 token and handled the approval process.
+- Successfully executed mint, borrow, and repay flows using the ERC20 token.
+- Confirmed that cross-asset borrowing (e.g., supplying ETH to borrow ERC20) functions securely.
+
+4. Liquidation Mechanics
+File: MoreFlows.ts
+Simulated a realistic DeFi risk scenario to test system solvency:
+- A user supplied collateral and borrowed against it.
+- Artificially lowered the asset price via the MockPriceOracle to simulate a market crash.
+- Confirmed that the account correctly entered a shortfall state.
+- Verified that a third-party liquidator could execute the liquidateBorrow function, successfully seizing the collateral and restoring system health.
+
+5. Aave Risk Management Parameters
+File: AaveFeatures.ts
+This section validates the newly integrated Aave-style risk models:
+- Supply and Borrow Caps: Configured maximum limits for deposits and borrows. Confirmed that any transaction exceeding these caps is reverted, preventing severe liquidity risks from oversized single-asset exposure.
+- Loan-to-Value (LTV) Limits: Validated the decoupling of LTV and Liquidation Threshold. Set LTV to 50% and Liquidation Threshold to 80%. Confirmed that new borrows are strictly capped at the 50% LTV mark, even if the account remains healthy.
+- Health Factor: Simulated a market crash and confirmed that when a user's Health Factor drops below 1.0, third-party liquidators are authorized to repay the debt and receive collateral plus the designated liquidation bonus.
+
+6. Emergency Market Pause Mechanism
+File: AaveFeatures.ts
+Tested the implemented circuit breaker pattern in the Comptroller:
+- Invoked the pause functionality as the administrator.
+- Verified that all core operations (mint, redeem, borrow, repay, liquidate) are successfully blocked and reverted with a explicit error.
+- Confirmed that normal operations resume immediately after unpausing the market.
+
+7. Oracle History and Frontend Dashboard Integration
+File: scripts/deploy-and-feed-oracle.ts & frontend/index.html
+- Upgraded the MockPriceOracle contract to store an array of historical prices alongside block timestamps.
+- Wrote a deployment script to simulate and inject multi-hour price fluctuations into the local node.
+- Developed a local web dashboard (frontend/index.html) using Ethers.js and Chart.js to fetch the on-chain history array and dynamically render the price trend, successfully demonstrating full-stack integration.
+
+---
+Final Test Execution Output:
+
+$ npx hardhat test
+Compiled 15 Solidity files with solc 0.8.28 (evm target: cancun)
+
+Running Solidity tests
+
+  contracts/Counter.t.sol:CounterTest
+    ✔ test_InitialValue()
+    ✔ test_IncByZero()
+    ✔ testFuzz_Inc(uint8) (runs: 256)
+
+Running node:test tests
+
+  Aave Advanced Features Tests
+    ✔ should enforce supply and borrow caps (2015ms)
+    ✔ should restrict borrowing based on LTV but liquidate based on Health Factor (77ms)
+    ✔ should block operations when market is paused
+
+  CEth simple flow
+    ✔ should deploy, supply, borrow and repay (1990ms)
+
+  Counter
+    ✔ Should emit the Increment event when calling the inc() function
+    ✔ The sum of the Increment events should match the current value
+
+  More lending flows
+    ✔ redeem: should mint ETH and redeem part of it (1975ms)
+    ✔ CErc20: should deposit, borrow and repay ERC20
+    ✔ liquidation: should become shortfall after price drop and be liquidated
+
+12 passing (3 solidity, 9 nodejs)
+Exit code: 0

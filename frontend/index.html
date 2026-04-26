@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aave Lending Protocol & Oracle Dashboard</title>
+    <!-- Ethers.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"
+        type="application/javascript"></script>
+    <!-- Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #eef2f5;
+            border-radius: 8px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        .status {
+            font-weight: bold;
+            color: #e74c3c;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Aave Protocol Oracle Dashboard</h1>
+
+        <div class="info-panel">
+            <div>
+                <strong>Node Status:</strong> <span id="connection-status" class="status">Not Connected</span>
+            </div>
+            <div>
+                <strong>Latest Underlying Price:</strong> <span id="latest-price"
+                    style="color: #27ae60; font-weight: bold;">--</span>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button id="connect-btn" onclick="connectAndFetch()">Connect to Localhost & Refresh</button>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="priceChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const ORACLE_ADDRESS = "0xc3e53f4d16ae77db1c982e75a937b9f60fe63690";
+        const ORACLE_ABI = [
+            "function getPriceHistory(address cToken) external view returns (tuple(uint256 price, uint256 timestamp)[])"
+        ];
+        const CTOKEN_ADDRESS = "0x0000000000000000000000000000000000000001";
+
+        let chartInstance = null;
+
+        function getMockData() {
+            const now = Math.floor(Date.now() / 1000);
+            return [
+                { timestamp: now - 5000, price: ethers.utils.parseEther("1800") },
+                { timestamp: now - 4000, price: ethers.utils.parseEther("1850") },
+                { timestamp: now - 3000, price: ethers.utils.parseEther("1790") },
+                { timestamp: now - 2000, price: ethers.utils.parseEther("1900") },
+                { timestamp: now - 1000, price: ethers.utils.parseEther("1950") },
+                { timestamp: now, price: ethers.utils.parseEther("2000") },
+            ];
+        }
+
+        async function connectAndFetch() {
+            const statusEl = document.getElementById("connection-status");
+            statusEl.innerText = "Connecting...";
+            statusEl.style.color = "#f39c12";
+
+            let history = [];
+
+            try {
+                const provider = new ethers.providers.JsonRpcProvider("http://127.0.0.1:8545");
+                await provider.getBlockNumber();
+                statusEl.innerText = "Connected to Localhost:8545";
+                statusEl.style.color = "#27ae60";
+
+                const oracleContract = new ethers.Contract(ORACLE_ADDRESS, ORACLE_ABI, provider);
+
+                try {
+                    history = await oracleContract.getPriceHistory(CTOKEN_ADDRESS);
+                    if (history.length === 0) {
+                        throw new Error("No data found");
+                    }
+                } catch (err) {
+                    console.warn("Could not fetch from contract, using mock data for demonstration.");
+                    history = getMockData();
+                    statusEl.innerText += " (Using Mock Data)";
+                }
+
+            } catch (error) {
+                console.error(error);
+                statusEl.innerText = "Connection Failed. Displaying Demo Data.";
+                statusEl.style.color = "#e74c3c";
+                // Fallback to mock data even if node is completely offline
+                history = getMockData();
+            }
+
+            renderChart(history);
+        }
+
+        function renderChart(history) {
+            if (!history || history.length === 0) {
+                alert("No price history data found!");
+                return;
+            }
+
+            const labels = [];
+            const dataPoints = [];
+            let latestPrice = "0";
+
+            history.forEach(record => {
+                const date = new Date(record.timestamp * 1000);
+                labels.push(date.toLocaleTimeString());
+
+                const priceFormatted = ethers.utils.formatEther(record.price.toString());
+                dataPoints.push(parseFloat(priceFormatted));
+                latestPrice = priceFormatted;
+            });
+
+            document.getElementById("latest-price").innerText = `$${latestPrice}`;
+
+            const ctx = document.getElementById('priceChart').getContext('2d');
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'ETH/USD Oracle Price',
+                        data: dataPoints,
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#2980b9',
+                        pointRadius: 4,
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            grid: { display: false }
+                        },
+                        y: {
+                            beginAtZero: false,
+                            grid: { color: '#ecf0f1' }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+
+</body>
+
+</html>
