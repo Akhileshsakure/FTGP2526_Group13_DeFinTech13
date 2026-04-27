@@ -1,5 +1,7 @@
 // scripts/deploy.ts — Hardhat 3 compatible
 import { network } from "hardhat";
+import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 async function main() {
   // In Hardhat 3 with hardhat-toolbox-mocha-ethers,
@@ -27,11 +29,11 @@ async function main() {
   console.log("\n2. Deploying JumpRateInterestStrategy...");
   const Strategy = await ethers.getContractFactory("JumpRateInterestStrategy");
   const strategy = await Strategy.deploy(
+    deployer.address,
     ethers.parseUnits("0.02", 18),   // baseRatePerYear 2%
     ethers.parseUnits("0.10", 18),   // multiplierPerYear 10%
     ethers.parseUnits("3.00", 18),   // jumpMultiplier 300%
-    ethers.parseUnits("0.80", 18),   // kink 80%
-    deployer.address
+    ethers.parseUnits("0.80", 18)    // kink 80%
   );
   await strategy.waitForDeployment();
   const strategyAddr = await strategy.getAddress();
@@ -43,8 +45,7 @@ async function main() {
   const comptroller = await Comptroller.deploy(
     deployer.address,
     oracleAddr,
-    ethers.parseUnits("0.50", 18),   // closeFactor 50%
-    ethers.parseUnits("1.08", 18)    // liquidationIncentive 8%
+    ethers.parseUnits("0.50", 18)    // closeFactor 50%
   );
   await comptroller.waitForDeployment();
   const comptrollerAddr = await comptroller.getAddress();
@@ -120,26 +121,61 @@ async function main() {
   // ── 8. Post-deploy config ────────────────────────────
   console.log("\n8. Setting oracle prices...");
   await (await oracle.setUnderlyingPrice(cETHAddr,  ethers.parseUnits("3000", 18))).wait();
-  await (await oracle.setUnderlyingPrice(cUSDCAddr, ethers.parseUnits("1", 18))).wait();
+  await (await oracle.setUnderlyingPrice(cUSDCAddr, ethers.parseUnits("1", 30))).wait();
   await (await oracle.setUnderlyingPrice(cDAIAddr,  ethers.parseUnits("1", 18))).wait();
   console.log("   ✓ Prices set");
 
   console.log("\n9. Listing markets in Comptroller...");
-  await (await (comptroller as any)._supportMarket(cETHAddr,  ethers.parseUnits("0.75", 18))).wait();
-  await (await (comptroller as any)._supportMarket(cUSDCAddr, ethers.parseUnits("0.80", 18))).wait();
-  await (await (comptroller as any)._supportMarket(cDAIAddr,  ethers.parseUnits("0.80", 18))).wait();
+  await (await (comptroller as any)._supportMarket(
+    cETHAddr,
+    ethers.parseUnits("0.75", 18),
+    ethers.parseUnits("0.80", 18),
+    ethers.parseUnits("1.05", 18)
+  )).wait();
+  await (await (comptroller as any)._supportMarket(
+    cUSDCAddr,
+    ethers.parseUnits("0.80", 18),
+    ethers.parseUnits("0.85", 18),
+    ethers.parseUnits("1.05", 18)
+  )).wait();
+  await (await (comptroller as any)._supportMarket(
+    cDAIAddr,
+    ethers.parseUnits("0.80", 18),
+    ethers.parseUnits("0.85", 18),
+    ethers.parseUnits("1.05", 18)
+  )).wait();
   console.log("   ✓ Markets listed");
 
   console.log("\n10. Approving Router in cTokens...");
+  await (await (comptroller as any).setRouter(routerAddr, true)).wait();
   await (await (cETH  as any).setRouter(routerAddr, true)).wait();
   await (await (cUSDC as any).setRouter(routerAddr, true)).wait();
   await (await (cDAI  as any).setRouter(routerAddr, true)).wait();
   console.log("   ✓ Router approved");
 
   // ── Print addresses ──────────────────────────────────
+
+  const frontendEnvPath = resolve(process.cwd(), "frontend", ".env.local");
+  const frontendRpcUrl = process.env.NEXT_PUBLIC_RPC_URL ?? process.env.SEPOLIA_RPC_URL ?? "";
+  const frontendEnv = [
+    `NEXT_PUBLIC_RPC_URL=${frontendRpcUrl}`,
+    `NEXT_PUBLIC_ORACLE_ADDRESS=${oracleAddr}`,
+    `NEXT_PUBLIC_INTEREST_STRATEGY_ADDRESS=${strategyAddr}`,
+    `NEXT_PUBLIC_COMPTROLLER_ADDRESS=${comptrollerAddr}`,
+    `NEXT_PUBLIC_CETH_ADDRESS=${cETHAddr}`,
+    `NEXT_PUBLIC_CUSDC_ADDRESS=${cUSDCAddr}`,
+    `NEXT_PUBLIC_CDAI_ADDRESS=${cDAIAddr}`,
+    `NEXT_PUBLIC_ROUTER_ADDRESS=${routerAddr}`,
+    `NEXT_PUBLIC_USDC_ADDRESS=${SEPOLIA_USDC}`,
+    `NEXT_PUBLIC_DAI_ADDRESS=${SEPOLIA_DAI}`,
+    "",
+  ].join("\n");
+
+  writeFileSync(frontendEnvPath, frontendEnv, "utf8");
   console.log("\n" + "=".repeat(60));
   console.log("DEPLOYMENT COMPLETE — paste into frontend/.env.local:");
   console.log("=".repeat(60));
+  console.log(`NEXT_PUBLIC_RPC_URL=${frontendRpcUrl}`);
   console.log(`NEXT_PUBLIC_ORACLE_ADDRESS=${oracleAddr}`);
   console.log(`NEXT_PUBLIC_INTEREST_STRATEGY_ADDRESS=${strategyAddr}`);
   console.log(`NEXT_PUBLIC_COMPTROLLER_ADDRESS=${comptrollerAddr}`);
@@ -147,6 +183,9 @@ async function main() {
   console.log(`NEXT_PUBLIC_CUSDC_ADDRESS=${cUSDCAddr}`);
   console.log(`NEXT_PUBLIC_CDAI_ADDRESS=${cDAIAddr}`);
   console.log(`NEXT_PUBLIC_ROUTER_ADDRESS=${routerAddr}`);
+  console.log(`NEXT_PUBLIC_USDC_ADDRESS=${SEPOLIA_USDC}`);
+  console.log(`NEXT_PUBLIC_DAI_ADDRESS=${SEPOLIA_DAI}`);
+  console.log(`Saved frontend env file: ${frontendEnvPath}`);
   console.log("=".repeat(60));
 }
 

@@ -9,6 +9,7 @@ import {
   formatUSD,
   formatAPY,
   formatHealthFactor,
+  formatTokenSmart,
   type MarketData,
   type AccountSummary,
 } from "../../lib/protocol";
@@ -181,8 +182,7 @@ export default function Dashboard() {
                           {parseFloat(pos.supplyBalanceUnderlying) > 0 && (
                             <div className="text-sm">
                               <span className="text-emerald-600 font-mono">
-                                +{parseFloat(pos.supplyBalanceUnderlying).toFixed(4)}{" "}
-                                {pos.market.symbol}
+                                +{formatTokenSmart(pos.supplyBalanceUnderlying, pos.market.symbol)}
                               </span>
                               <span className="text-stone-400 text-xs ml-1">supplied</span>
                             </div>
@@ -190,8 +190,7 @@ export default function Dashboard() {
                           {parseFloat(pos.borrowBalance) > 0 && (
                             <div className="text-sm">
                               <span className="text-amber-600 font-mono">
-                                -{parseFloat(pos.borrowBalance).toFixed(4)}{" "}
-                                {pos.market.symbol}
+                                -{formatTokenSmart(pos.borrowBalance, pos.market.symbol)}
                               </span>
                               <span className="text-stone-400 text-xs ml-1">borrowed</span>
                             </div>

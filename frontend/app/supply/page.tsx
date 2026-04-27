@@ -17,6 +17,7 @@ import {
   exitMarket,
   formatUSD,
   formatAPY,
+  formatTokenSmart,
   type MarketData,
   type AccountSummary,
 } from "../../lib/protocol";
@@ -65,9 +66,9 @@ function SupplyInner() {
     loadData();
   }, [loadData]);
 
-  const handleMaxSupply = () => setAmount(parseFloat(walletBalance).toFixed(6));
+  const handleMaxSupply = () => setAmount(walletBalance);
   const handleMaxRedeem = () =>
-    setAmount(parseFloat(userPosition?.supplyBalanceUnderlying ?? "0").toFixed(6));
+    setAmount(userPosition?.supplyBalanceUnderlying ?? "0");
 
   const handleSupply = async () => {
     if (!amount || parseFloat(amount) <= 0) return;
@@ -164,7 +165,7 @@ function SupplyInner() {
         />
         <InfoCard
           label="Your Supply"
-          value={loading ? null : `${supplied.toFixed(4)} ${selectedMarket.symbol}`}
+          value={loading ? null : formatTokenSmart(userPosition?.supplyBalanceUnderlying ?? "0", selectedMarket.symbol)}
         />
         <InfoCard
           label="Collateral"
@@ -198,8 +199,8 @@ function SupplyInner() {
           >
             MAX:{" "}
             {tab === "supply"
-              ? `${wallet.toFixed(4)} ${selectedMarket.symbol}`
-              : `${supplied.toFixed(4)} ${selectedMarket.symbol}`}
+              ? formatTokenSmart(wallet, selectedMarket.symbol)
+              : formatTokenSmart(userPosition?.supplyBalanceUnderlying ?? "0", selectedMarket.symbol)}
           </button>
         </div>
         <div className="relative">
@@ -283,7 +284,7 @@ function SupplyInner() {
       {isConnected && isCorrectNetwork && (
         <div className="mt-4 text-center text-xs text-stone-400">
           Wallet balance:{" "}
-          <span className="font-mono">{wallet.toFixed(6)} {selectedMarket.symbol}</span>
+          <span className="font-mono">{formatTokenSmart(wallet, selectedMarket.symbol, 6)}</span>
         </div>
       )}
     </div>

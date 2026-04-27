@@ -60,24 +60,24 @@ export const MARKETS: MarketConfig[] = [
     underlyingAddress: ADDRESSES.DAI,
     isNative: false,
     decimals: 18,
-    icon: "◈",
+    icon: "◇",
     collateralFactor: 80,
   },
 ];
 
 export const COMPTROLLER_ABI = [
-  "function getAccountLiquidity(address account) view returns (uint256 error, uint256 liquidity, uint256 shortfall)",
-  "function getAccountHealthFactor(address account) view returns (uint256 error, uint256 healthFactor)",
-  "function getHypotheticalAccountLiquidity(address account, address cTokenModify, uint256 redeemTokens, uint256 borrowAmount) view returns (uint256 error, uint256 liquidity, uint256 shortfall)",
-  "function markets(address cToken) view returns (bool isListed, uint256 ltvMantissa, uint256 liquidationThresholdMantissa, uint256 liquidationBonusMantissa, uint256 supplyCap, uint256 borrowCap)",
-  "function accountMembership(address user, address cToken) view returns (bool)",
-  "function checkMembership(address account, address cToken) view returns (bool)",
-  "function getAssetsIn(address account) view returns (address[])",
+  "function getAccountLiquidity(address) view returns (uint256,uint256,uint256)",
+  "function getAccountHealthFactor(address) view returns (uint256,uint256)",
+  "function getHypotheticalAccountLiquidity(address,address,uint256,uint256) view returns (uint256,uint256,uint256)",
+  "function markets(address) view returns (bool,uint256,uint256,uint256,uint256,uint256)",
+  "function accountMembership(address,address) view returns (bool)",
+  "function checkMembership(address,address) view returns (bool)",
+  "function getAssetsIn(address) view returns (address[])",
   "function getAllMarkets() view returns (address[])",
   "function closeFactorMantissa() view returns (uint256)",
   "function oracle() view returns (address)",
-  "function enterMarkets(address[] calldata cTokens) returns (uint256[])",
-  "function exitMarket(address cToken) returns (uint256)",
+  "function enterMarkets(address[]) returns (uint256[])",
+  "function exitMarket(address) returns (uint256)",
 ] as const;
 
 export const CTOKEN_BASE_ABI = [
@@ -85,13 +85,13 @@ export const CTOKEN_BASE_ABI = [
   "function symbol() view returns (string)",
   "function decimals() view returns (uint8)",
   "function totalSupply() view returns (uint256)",
-  "function balanceOf(address owner) view returns (uint256)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function approve(address spender, uint256 amount) returns (bool)",
+  "function balanceOf(address) view returns (uint256)",
+  "function allowance(address,address) view returns (uint256)",
+  "function approve(address,uint256) returns (bool)",
   "function exchangeRateStored() view returns (uint256)",
   "function exchangeRateCurrent() returns (uint256)",
-  "function borrowBalanceStored(address account) view returns (uint256)",
-  "function borrowBalanceCurrent(address account) returns (uint256)",
+  "function borrowBalanceStored(address) view returns (uint256)",
+  "function borrowBalanceCurrent(address) returns (uint256)",
   "function totalBorrows() view returns (uint256)",
   "function totalBorrowsCurrent() returns (uint256)",
   "function totalReserves() view returns (uint256)",
@@ -100,20 +100,20 @@ export const CTOKEN_BASE_ABI = [
   "function borrowIndex() view returns (uint256)",
   "function accrualTimestamp() view returns (uint256)",
   "function getCashPrior() view returns (uint256)",
-  "function getAccountSnapshot(address account) view returns (uint256 error, uint256 cTokenBalance, uint256 borrowBalance, uint256 exchangeRateMantissa)",
-  "function mint(uint256 mintAmount) returns (uint256)",
-  "function redeem(uint256 redeemTokens) returns (uint256)",
-  "function redeemUnderlying(uint256 redeemAmount) returns (uint256)",
-  "function borrow(uint256 borrowAmount) returns (uint256)",
-  "function repayBorrow(uint256 repayAmount) returns (uint256)",
-  "function repayBorrowBehalf(address borrower, uint256 repayAmount) returns (uint256)",
+  "function getAccountSnapshot(address) view returns (uint256,uint256,uint256,uint256)",
+  "function mint(uint256) returns (uint256)",
+  "function redeem(uint256) returns (uint256)",
+  "function redeemUnderlying(uint256) returns (uint256)",
+  "function borrow(uint256) returns (uint256)",
+  "function repayBorrow(uint256) returns (uint256)",
+  "function repayBorrowBehalf(address,uint256) returns (uint256)",
 ] as const;
 
 export const CETH_ABI = [
   ...CTOKEN_BASE_ABI,
   "function mint() payable returns (uint256)",
   "function repayBorrow() payable returns (uint256)",
-  "function repayBorrowBehalf(address borrower) payable returns (uint256)",
+  "function repayBorrowBehalf(address) payable returns (uint256)",
 ] as const;
 
 export const CERC20_ABI = [
@@ -126,22 +126,22 @@ export const ERC20_ABI = [
   "function symbol() view returns (string)",
   "function decimals() view returns (uint8)",
   "function totalSupply() view returns (uint256)",
-  "function balanceOf(address owner) view returns (uint256)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function approve(address spender, uint256 amount) returns (bool)",
-  "function transfer(address to, uint256 amount) returns (bool)",
-  "function transferFrom(address from, address to, uint256 amount) returns (bool)",
+  "function balanceOf(address) view returns (uint256)",
+  "function allowance(address,address) view returns (uint256)",
+  "function approve(address,uint256) returns (bool)",
+  "function transfer(address,uint256) returns (bool)",
+  "function transferFrom(address,address,uint256) returns (bool)",
   "event Approval(address indexed owner, address indexed spender, uint256 value)",
   "event Transfer(address indexed from, address indexed to, uint256 value)",
 ] as const;
 
 export const ORACLE_ABI = [
-  "function getUnderlyingPrice(address cToken) view returns (uint256)",
-  "function prices(address cToken) view returns (uint256)",
+  "function getUnderlyingPrice(address) view returns (uint256)",
+  "function prices(address) view returns (uint256)",
 ] as const;
 
 export const INTEREST_STRATEGY_ABI = [
-  "function getBorrowRate(uint256 cash, uint256 totalBorrows, uint256 totalReserves) view returns (uint256)",
+  "function getBorrowRate(uint256,uint256,uint256) view returns (uint256)",
 ] as const;
 
 export const ROUTER_ABI = [

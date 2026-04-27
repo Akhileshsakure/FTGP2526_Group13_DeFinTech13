@@ -31,6 +31,10 @@ async function writeContract(address: string, abi: readonly string[]) {
   return new Contract(address, abi, signer);
 }
 
+function fn(contract: Contract, signature: string) {
+  return contract.getFunction(signature);
+}
+
 function assertAddress(address: string | null | undefined, label: string): asserts address is string {
   if (!address || !ethers.isAddress(address)) {
     throw new Error(`${label} is not configured`);
@@ -43,13 +47,9 @@ function wadToNumber(value: bigint): number {
 
 function formatOraclePrice(price: bigint, decimals: number): number {
   if (price === 0n) return 0;
-
-  // New deployments should scale non-18-decimal assets by 10^(18-decimals)
-  // before storing them in the oracle. Keep a fallback for older 1e18 mocks.
   if (decimals < 18 && price >= 10n ** 24n) {
     return Number(ethers.formatUnits(price, 18 + (18 - decimals)));
   }
-
   return Number(ethers.formatUnits(price, 18));
 }
 
@@ -109,15 +109,15 @@ export async function fetchMarketData(market: MarketConfig): Promise<MarketData>
     marketInfo,
     strategyAddress,
   ] = await Promise.all([
-    cToken.totalSupply(),
-    cToken.totalBorrows(),
-    cToken.totalReserves(),
-    cToken.reserveFactorMantissa(),
-    cToken.getCashPrior(),
-    cToken.exchangeRateStored(),
-    oracle.getUnderlyingPrice(market.cTokenAddress),
-    comptroller.markets(market.cTokenAddress),
-    cToken.interestRateStrategy(),
+    fn(cToken, "totalSupply()")(),
+    fn(cToken, "totalBorrows()")(),
+    fn(cToken, "totalReserves()")(),
+    fn(cToken, "reserveFactorMantissa()")(),
+    fn(cToken, "getCashPrior()")(),
+    fn(cToken, "exchangeRateStored()")(),
+    fn(oracle, "getUnderlyingPrice(address)")(market.cTokenAddress),
+    fn(comptroller, "markets(address)")(market.cTokenAddress),
+    fn(cToken, "interestRateStrategy()")(),
   ]);
 
   const totalSupply = BigInt(totalSupplyRaw);
@@ -127,7 +127,6 @@ export async function fetchMarketData(market: MarketConfig): Promise<MarketData>
   const exchangeRate = BigInt(exchangeRateRaw);
   const reserveFactor = BigInt(reserveFactorRaw);
   const totalLiquidity = cash + totalBorrows - totalReserves;
-
   const utilizationRate =
     totalLiquidity === 0n ? 0 : Number((totalBorrows * 10_000n) / totalLiquidity) / 100;
 
@@ -136,13 +135,15 @@ export async function fetchMarketData(market: MarketConfig): Promise<MarketData>
   try {
     const strategy = new Contract(strategyAddress, INTEREST_STRATEGY_ABI, provider);
     const borrowRatePerSecond = BigInt(
-      await strategy.getBorrowRate(cash, totalBorrows, totalReserves)
+      await fn(strategy, "getBorrowRate(uint256,uint256,uint256)")(
+        cash,
+        totalBorrows,
+        totalReserves
+      )
     );
-    const rate = wadToNumber(borrowRatePerSecond);
-    borrowAPY = (Math.pow(1 + rate, SECONDS_PER_YEAR) - 1) * 100;
-
-    const reserveFactorNumber = wadToNumber(reserveFactor);
-    supplyAPY = borrowAPY * (utilizationRate / 100) * (1 - reserveFactorNumber);
+    const borrowRate = wadToNumber(borrowRatePerSecond);
+    borrowAPY = (Math.pow(1 + borrowRate, SECONDS_PER_YEAR) - 1) * 100;
+    supplyAPY = borrowAPY * (utilizationRate / 100) * (1 - wadToNumber(reserveFactor));
   } catch {
     borrowAPY = 0;
     supplyAPY = 0;
@@ -150,10 +151,6 @@ export async function fetchMarketData(market: MarketConfig): Promise<MarketData>
 
   const totalSupplyUnderlying = (totalSupply * exchangeRate) / WAD;
   const priceUSD = formatOraclePrice(BigInt(priceRaw), market.decimals);
-  const collateralFactor = wadToNumber(BigInt(marketInfo.ltvMantissa ?? marketInfo[1])) * 100;
-  const liquidationThreshold =
-    wadToNumber(BigInt(marketInfo.liquidationThresholdMantissa ?? marketInfo[2])) * 100;
-  const liquidationBonus = wadToNumber(BigInt(marketInfo.liquidationBonusMantissa ?? marketInfo[3])) * 100;
 
   return {
     market,
@@ -163,11 +160,11 @@ export async function fetchMarketData(market: MarketConfig): Promise<MarketData>
     totalBorrows: formatUnits(totalBorrows, market.decimals),
     utilizationRate,
     priceUSD,
-    collateralFactor,
-    liquidationThreshold,
-    liquidationBonus,
-    supplyCap: BigInt(marketInfo.supplyCap ?? marketInfo[4]),
-    borrowCap: BigInt(marketInfo.borrowCap ?? marketInfo[5]),
+    collateralFactor: wadToNumber(BigInt(marketInfo[1])) * 100,
+    liquidationThreshold: wadToNumber(BigInt(marketInfo[2])) * 100,
+    liquidationBonus: wadToNumber(BigInt(marketInfo[3])) * 100,
+    supplyCap: BigInt(marketInfo[4]),
+    borrowCap: BigInt(marketInfo[5]),
     exchangeRate,
   };
 }
@@ -187,15 +184,20 @@ export async function fetchUserPositions(
   const positions = await Promise.all(
     marketsData.map(async (md) => {
       const cToken = new Contract(md.market.cTokenAddress, getCTokenABI(md.market), provider);
+      const [cTokenBalanceRaw, borrowBalanceRaw, exchangeRateRaw, isCollateral] =
+        await Promise.all([
+          fn(cToken, "balanceOf(address)")(userAddress),
+          fn(cToken, "borrowBalanceStored(address)")(userAddress),
+          fn(cToken, "exchangeRateStored()")(),
+          fn(comptroller, "checkMembership(address,address)")(
+            userAddress,
+            md.market.cTokenAddress
+          ),
+        ]);
 
-      const [snapshot, isCollateral] = await Promise.all([
-        cToken.getAccountSnapshot(userAddress),
-        comptroller.checkMembership(userAddress, md.market.cTokenAddress),
-      ]);
-
-      const cTokenBalance = BigInt(snapshot.cTokenBalance ?? snapshot[1]);
-      const borrowBalance = BigInt(snapshot.borrowBalance ?? snapshot[2]);
-      const exchangeRate = BigInt(snapshot.exchangeRateMantissa ?? snapshot[3]);
+      const cTokenBalance = BigInt(cTokenBalanceRaw);
+      const borrowBalance = BigInt(borrowBalanceRaw);
+      const exchangeRate = BigInt(exchangeRateRaw);
       const supplyUnderlying = (cTokenBalance * exchangeRate) / WAD;
       const supplyStr = formatUnits(supplyUnderlying, md.market.decimals);
       const borrowStr = formatUnits(borrowBalance, md.market.decimals);
@@ -213,8 +215,8 @@ export async function fetchUserPositions(
   );
 
   const [[, liquidity, shortfall], [healthErr, healthFactorRaw]] = await Promise.all([
-    comptroller.getAccountLiquidity(userAddress),
-    comptroller.getAccountHealthFactor(userAddress),
+    fn(comptroller, "getAccountLiquidity(address)")(userAddress),
+    fn(comptroller, "getAccountHealthFactor(address)")(userAddress),
   ]);
 
   const totalSuppliedUSD = positions.reduce((sum, p) => sum + p.supplyBalanceUSD, 0);
@@ -250,14 +252,13 @@ export async function fetchWalletBalance(
   market: MarketConfig
 ): Promise<string> {
   const provider = getReadProvider();
-
   if (market.isNative) {
     return formatUnits(await provider.getBalance(userAddress), 18);
   }
 
   assertAddress(market.underlyingAddress, `${market.symbol} underlying address`);
   const token = new Contract(market.underlyingAddress, ERC20_ABI, provider);
-  return formatUnits(BigInt(await token.balanceOf(userAddress)), market.decimals);
+  return formatUnits(BigInt(await fn(token, "balanceOf(address)")(userAddress)), market.decimals);
 }
 
 export async function approveToken(
@@ -266,7 +267,7 @@ export async function approveToken(
   amount: bigint
 ): Promise<ethers.ContractTransactionReceipt | null> {
   const token = await writeContract(tokenAddress, ERC20_ABI);
-  const tx = await token.approve(spenderAddress, amount);
+  const tx = await fn(token, "approve(address,uint256)")(spenderAddress, amount);
   return tx.wait();
 }
 
@@ -276,7 +277,7 @@ export async function checkAllowance(
   spenderAddress: string
 ): Promise<bigint> {
   const token = readContract(tokenAddress, ERC20_ABI);
-  return BigInt(await token.allowance(ownerAddress, spenderAddress));
+  return BigInt(await fn(token, "allowance(address,address)")(ownerAddress, spenderAddress));
 }
 
 export async function supplyAsset(
@@ -288,19 +289,23 @@ export async function supplyAsset(
 
   if (market.isNative) {
     const cEth = new Contract(market.cTokenAddress, CETH_ABI, signer);
-    const tx = await cEth.mint({ value: amount });
+    const tx = await fn(cEth, "mint()")({ value: amount });
     return tx.wait();
   }
 
   assertAddress(market.underlyingAddress, `${market.symbol} underlying address`);
   const userAddress = await signer.getAddress();
-  const allowance = await checkAllowance(market.underlyingAddress, userAddress, market.cTokenAddress);
+  const allowance = await checkAllowance(
+    market.underlyingAddress,
+    userAddress,
+    market.cTokenAddress
+  );
   if (allowance < amount) {
     await approveToken(market.underlyingAddress, market.cTokenAddress, amount);
   }
 
   const cErc20 = new Contract(market.cTokenAddress, CERC20_ABI, signer);
-  const tx = await cErc20.mint(amount);
+  const tx = await fn(cErc20, "mint(uint256)")(amount);
   return tx.wait();
 }
 
@@ -311,7 +316,7 @@ export async function redeemAsset(
   const amount = parseUnits(amountHuman, market.decimals);
   const signer = await getSigner();
   const cToken = new Contract(market.cTokenAddress, getCTokenABI(market), signer);
-  const tx = await cToken.redeemUnderlying(amount);
+  const tx = await fn(cToken, "redeemUnderlying(uint256)")(amount);
   return tx.wait();
 }
 
@@ -322,7 +327,7 @@ export async function borrowAsset(
   const amount = parseUnits(amountHuman, market.decimals);
   const signer = await getSigner();
   const cToken = new Contract(market.cTokenAddress, getCTokenABI(market), signer);
-  const tx = await cToken.borrow(amount);
+  const tx = await fn(cToken, "borrow(uint256)")(amount);
   return tx.wait();
 }
 
@@ -336,7 +341,7 @@ export async function repayBorrow(
   if (market.isNative) {
     const amount = parseUnits(amountHuman, 18);
     const cEth = new Contract(market.cTokenAddress, CETH_ABI, signer);
-    const tx = await cEth.repayBorrow({ value: amount });
+    const tx = await fn(cEth, "repayBorrow()")({ value: amount });
     return tx.wait();
   }
 
@@ -344,13 +349,17 @@ export async function repayBorrow(
   const amount = repayFull ? ethers.MaxUint256 : parseUnits(amountHuman, market.decimals);
   const approveAmount = repayFull ? ethers.MaxUint256 : amount;
   const userAddress = await signer.getAddress();
-  const allowance = await checkAllowance(market.underlyingAddress, userAddress, market.cTokenAddress);
+  const allowance = await checkAllowance(
+    market.underlyingAddress,
+    userAddress,
+    market.cTokenAddress
+  );
   if (allowance < amount) {
     await approveToken(market.underlyingAddress, market.cTokenAddress, approveAmount);
   }
 
   const cErc20 = new Contract(market.cTokenAddress, CERC20_ABI, signer);
-  const tx = await cErc20.repayBorrow(amount);
+  const tx = await fn(cErc20, "repayBorrow(uint256)")(amount);
   return tx.wait();
 }
 
@@ -358,7 +367,7 @@ export async function enterMarket(
   cTokenAddress: string
 ): Promise<ethers.ContractTransactionReceipt | null> {
   const comptroller = await writeContract(ADDRESSES.comptroller, COMPTROLLER_ABI);
-  const tx = await comptroller.enterMarkets([cTokenAddress]);
+  const tx = await fn(comptroller, "enterMarkets(address[])")([cTokenAddress]);
   return tx.wait();
 }
 
@@ -366,7 +375,7 @@ export async function exitMarket(
   cTokenAddress: string
 ): Promise<ethers.ContractTransactionReceipt | null> {
   const comptroller = await writeContract(ADDRESSES.comptroller, COMPTROLLER_ABI);
-  const tx = await comptroller.exitMarket(cTokenAddress);
+  const tx = await fn(comptroller, "exitMarket(address)")(cTokenAddress);
   return tx.wait();
 }
 
@@ -390,6 +399,36 @@ export function formatToken(value: string, decimals: number = 4): string {
   return num.toFixed(decimals);
 }
 
+export function formatTokenSmart(
+  value: string | number,
+  symbol: string,
+  decimals: number = 4
+): string {
+  const num = typeof value === "number" ? value : parseFloat(value);
+
+  if (!isFinite(num) || isNaN(num) || num === 0) {
+    return `${(0).toFixed(decimals)} ${symbol}`;
+  }
+
+  const minVisible = 1 / 10 ** decimals;
+
+  if (num > 0 && num < minVisible) {
+    return `< ${minVisible.toFixed(decimals)} ${symbol}`;
+  }
+
+  return `${num.toFixed(decimals)} ${symbol}`;
+}
+
+export function formatTokenExact(value: string | number, symbol: string): string {
+  const raw = typeof value === "number" ? value.toString() : value;
+  const num = parseFloat(raw);
+
+  if (!isFinite(num) || isNaN(num) || num === 0) {
+    return `0 ${symbol}`;
+  }
+
+  return `${raw.replace(/(\.\d*?[1-9])0+$/, "$1").replace(/\.0+$/, "")} ${symbol}`;
+}
 export function formatHealthFactor(hf: number): string {
   if (!isFinite(hf)) return "∞";
   return hf.toFixed(2);

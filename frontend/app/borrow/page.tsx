@@ -14,6 +14,7 @@ import {
   formatUSD,
   formatAPY,
   formatHealthFactor,
+  formatTokenSmart,
   type MarketData,
   type AccountSummary,
 } from "../../lib/protocol";
@@ -73,9 +74,9 @@ function BorrowInner() {
   const borrowed = parseFloat(userPosition?.borrowBalance ?? "0");
   const wallet = parseFloat(walletBalance);
 
-  const handleMaxBorrow = () => setAmount(maxBorrowAmount.toFixed(6));
+  const handleMaxBorrow = () => setAmount(maxBorrowAmount.toFixed(8));
   const handleMaxRepay = () => {
-    setAmount(borrowed.toFixed(6));
+    setAmount(userPosition?.borrowBalance ?? "0");
     setRepayFull(true);
   };
 
@@ -100,7 +101,7 @@ function BorrowInner() {
     setTxLoading(true);
     try {
       addToast("Confirm transaction in MetaMask…", "pending");
-      const repayAmount = repayFull ? borrowed.toFixed(6) : amount;
+      const repayAmount = repayFull ? userPosition?.borrowBalance ?? "0" : amount;
       const receipt = await repayBorrow(selectedMarket, repayAmount, repayFull);
       addToast("Repay successful!", "success", receipt?.hash);
       setAmount("");
@@ -173,7 +174,7 @@ function BorrowInner() {
         />
         <InfoCard
           label="You Borrowed"
-          value={loading ? null : `${borrowed.toFixed(4)} ${selectedMarket.symbol}`}
+          value={loading ? null : formatTokenSmart(userPosition?.borrowBalance ?? "0", selectedMarket.symbol)}
         />
         <InfoCard
           label="Health Factor"
@@ -198,7 +199,7 @@ function BorrowInner() {
             {formatUSD(summary.availableToBorrowUSD)}
             {selectedMarketData && (
               <span className="text-stone-400 text-xs ml-1">
-                (~{maxBorrowAmount.toFixed(4)} {selectedMarket.symbol})
+                (~{formatTokenSmart(maxBorrowAmount, selectedMarket.symbol)})
               </span>
             )}
           </span>
@@ -231,14 +232,14 @@ function BorrowInner() {
               onClick={handleMaxBorrow}
               className="text-xs text-emerald-600 font-medium hover:text-emerald-700"
             >
-              MAX: {maxBorrowAmount.toFixed(4)} {selectedMarket.symbol}
+              MAX: {formatTokenSmart(maxBorrowAmount, selectedMarket.symbol)}
             </button>
           ) : (
             <button
               onClick={handleMaxRepay}
               className="text-xs text-emerald-600 font-medium hover:text-emerald-700"
             >
-              REPAY ALL: {borrowed.toFixed(4)} {selectedMarket.symbol}
+              REPAY ALL: {formatTokenSmart(userPosition?.borrowBalance ?? "0", selectedMarket.symbol)}
             </button>
           )}
         </div>
@@ -251,7 +252,7 @@ function BorrowInner() {
               checked={repayFull}
               onChange={(e) => {
                 setRepayFull(e.target.checked);
-                if (e.target.checked) setAmount(borrowed.toFixed(6));
+                if (e.target.checked) setAmount(userPosition?.borrowBalance ?? "0");
               }}
               className="rounded"
             />
@@ -350,7 +351,7 @@ function BorrowInner() {
       {isConnected && isCorrectNetwork && (
         <div className="mt-4 text-center text-xs text-stone-400">
           Wallet balance:{" "}
-          <span className="font-mono">{wallet.toFixed(6)} {selectedMarket.symbol}</span>
+          <span className="font-mono">{formatTokenSmart(wallet, selectedMarket.symbol, 6)}</span>
         </div>
       )}
     </div>

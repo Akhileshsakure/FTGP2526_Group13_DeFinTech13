@@ -26,6 +26,10 @@ function wadToNumber(value: bigint): number {
   return Number(ethers.formatUnits(value, 18));
 }
 
+function fn(contract: Contract, signature: string) {
+  return contract.getFunction(signature);
+}
+
 function formatOraclePrice(price: bigint, decimals: number): number {
   if (price === 0n) return 0;
   if (decimals < 18 && price >= 10n ** 24n) {
@@ -50,15 +54,15 @@ async function getMarketData(market: MarketConfig, provider: JsonRpcProvider) {
     marketInfo,
     strategyAddress,
   ] = await Promise.all([
-    cToken.totalSupply(),
-    cToken.totalBorrows(),
-    cToken.totalReserves(),
-    cToken.reserveFactorMantissa(),
-    cToken.getCashPrior(),
-    cToken.exchangeRateStored(),
-    oracle.getUnderlyingPrice(market.cTokenAddress),
-    comptroller.markets(market.cTokenAddress),
-    cToken.interestRateStrategy(),
+    fn(cToken, "totalSupply()")(),
+    fn(cToken, "totalBorrows()")(),
+    fn(cToken, "totalReserves()")(),
+    fn(cToken, "reserveFactorMantissa()")(),
+    fn(cToken, "getCashPrior()")(),
+    fn(cToken, "exchangeRateStored()")(),
+    fn(oracle, "getUnderlyingPrice(address)")(market.cTokenAddress),
+    fn(comptroller, "markets(address)")(market.cTokenAddress),
+    fn(cToken, "interestRateStrategy()")(),
   ]);
 
   const totalSupply = BigInt(totalSupplyRaw);
@@ -77,7 +81,11 @@ async function getMarketData(market: MarketConfig, provider: JsonRpcProvider) {
   try {
     const strategy = new Contract(strategyAddress, INTEREST_STRATEGY_ABI, provider);
     const borrowRatePerSecond = BigInt(
-      await strategy.getBorrowRate(cash, totalBorrows, totalReserves)
+      await fn(strategy, "getBorrowRate(uint256,uint256,uint256)")(
+        cash,
+        totalBorrows,
+        totalReserves
+      )
     );
     const rate = wadToNumber(borrowRatePerSecond);
     borrowAPY = (Math.pow(1 + rate, SECONDS_PER_YEAR) - 1) * 100;
@@ -105,12 +113,11 @@ async function getMarketData(market: MarketConfig, provider: JsonRpcProvider) {
     totalBorrows: ethers.formatUnits(totalBorrows, market.decimals),
     utilizationRate,
     priceUSD,
-    collateralFactor: wadToNumber(BigInt(marketInfo.ltvMantissa ?? marketInfo[1])) * 100,
-    liquidationThreshold:
-      wadToNumber(BigInt(marketInfo.liquidationThresholdMantissa ?? marketInfo[2])) * 100,
-    liquidationBonus: wadToNumber(BigInt(marketInfo.liquidationBonusMantissa ?? marketInfo[3])) * 100,
-    supplyCap: BigInt(marketInfo.supplyCap ?? marketInfo[4]).toString(),
-    borrowCap: BigInt(marketInfo.borrowCap ?? marketInfo[5]).toString(),
+    collateralFactor: wadToNumber(BigInt(marketInfo[1])) * 100,
+    liquidationThreshold: wadToNumber(BigInt(marketInfo[2])) * 100,
+    liquidationBonus: wadToNumber(BigInt(marketInfo[3])) * 100,
+    supplyCap: BigInt(marketInfo[4]).toString(),
+    borrowCap: BigInt(marketInfo[5]).toString(),
     exchangeRate: exchangeRate.toString(),
   };
 }
