@@ -19,6 +19,7 @@ import {
 const WAD = 1_000_000_000_000_000_000n;
 const SECONDS_PER_YEAR = 31_536_000;
 const MAX_HEALTH_FACTOR_DISPLAY = 1_000_000;
+const READ_RETRY_COUNT = 2;
 
 function readContract(address: string, abi: readonly string[]) {
   assertAddress(address, "Contract address");
@@ -33,6 +34,35 @@ async function writeContract(address: string, abi: readonly string[]) {
 
 function fn(contract: Contract, signature: string) {
   return contract.getFunction(signature);
+}
+
+function isRetryableReadError(error: unknown): boolean {
+  const err = error as { code?: string; message?: string; shortMessage?: string };
+  const message = `${err.shortMessage ?? ""} ${err.message ?? ""}`.toLowerCase();
+  return (
+    err.code === "CALL_EXCEPTION" ||
+    message.includes("missing revert data") ||
+    message.includes("failed to detect network") ||
+    message.includes("could not coalesce error")
+  );
+}
+
+async function readWithRetry<T>(read: () => Promise<T>, retries = READ_RETRY_COUNT): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await read();
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableReadError(error) || attempt === retries) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+  }
+
+  throw lastError;
 }
 
 function assertAddress(address: string | null | undefined, label: string): asserts address is string {
@@ -109,15 +139,15 @@ export async function fetchMarketData(market: MarketConfig): Promise<MarketData>
     marketInfo,
     strategyAddress,
   ] = await Promise.all([
-    fn(cToken, "totalSupply()")(),
-    fn(cToken, "totalBorrows()")(),
-    fn(cToken, "totalReserves()")(),
-    fn(cToken, "reserveFactorMantissa()")(),
-    fn(cToken, "getCashPrior()")(),
-    fn(cToken, "exchangeRateStored()")(),
-    fn(oracle, "getUnderlyingPrice(address)")(market.cTokenAddress),
-    fn(comptroller, "markets(address)")(market.cTokenAddress),
-    fn(cToken, "interestRateStrategy()")(),
+    readWithRetry(() => fn(cToken, "totalSupply()")()),
+    readWithRetry(() => fn(cToken, "totalBorrows()")()),
+    readWithRetry(() => fn(cToken, "totalReserves()")()),
+    readWithRetry(() => fn(cToken, "reserveFactorMantissa()")()),
+    readWithRetry(() => fn(cToken, "getCashPrior()")()),
+    readWithRetry(() => fn(cToken, "exchangeRateStored()")()),
+    readWithRetry(() => fn(oracle, "getUnderlyingPrice(address)")(market.cTokenAddress)),
+    readWithRetry(() => fn(comptroller, "markets(address)")(market.cTokenAddress)),
+    readWithRetry(() => fn(cToken, "interestRateStrategy()")()),
   ]);
 
   const totalSupply = BigInt(totalSupplyRaw);
@@ -144,6 +174,9 @@ export async function fetchMarketData(market: MarketConfig): Promise<MarketData>
     const borrowRate = wadToNumber(borrowRatePerSecond);
     borrowAPY = (Math.pow(1 + borrowRate, SECONDS_PER_YEAR) - 1) * 100;
     supplyAPY = borrowAPY * (utilizationRate / 100) * (1 - wadToNumber(reserveFactor));
+    if (supplyAPY === 0 && totalLiquidity > 0n && borrowAPY > 0) {
+      supplyAPY = borrowAPY * (1 - wadToNumber(reserveFactor));
+    }
   } catch {
     borrowAPY = 0;
     supplyAPY = 0;
@@ -170,7 +203,19 @@ export async function fetchMarketData(market: MarketConfig): Promise<MarketData>
 }
 
 export async function fetchAllMarkets(): Promise<MarketData[]> {
-  return Promise.all(MARKETS.map(fetchMarketData));
+  const results = await Promise.allSettled(MARKETS.map(fetchMarketData));
+  const markets = results.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : []
+  );
+
+  if (markets.length === 0) {
+    const firstError = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected"
+    )?.reason;
+    throw firstError instanceof Error ? firstError : new Error("Could not load market data");
+  }
+
+  return markets;
 }
 
 export async function fetchUserPositions(
@@ -186,13 +231,13 @@ export async function fetchUserPositions(
       const cToken = new Contract(md.market.cTokenAddress, getCTokenABI(md.market), provider);
       const [cTokenBalanceRaw, borrowBalanceRaw, exchangeRateRaw, isCollateral] =
         await Promise.all([
-          fn(cToken, "balanceOf(address)")(userAddress),
-          fn(cToken, "borrowBalanceStored(address)")(userAddress),
-          fn(cToken, "exchangeRateStored()")(),
-          fn(comptroller, "checkMembership(address,address)")(
+          readWithRetry(() => fn(cToken, "balanceOf(address)")(userAddress)),
+          readWithRetry(() => fn(cToken, "borrowBalanceStored(address)")(userAddress)),
+          readWithRetry(() => fn(cToken, "exchangeRateStored()")()),
+          readWithRetry(() => fn(comptroller, "checkMembership(address,address)")(
             userAddress,
             md.market.cTokenAddress
-          ),
+          )),
         ]);
 
       const cTokenBalance = BigInt(cTokenBalanceRaw);
@@ -215,8 +260,8 @@ export async function fetchUserPositions(
   );
 
   const [[, liquidity, shortfall], [healthErr, healthFactorRaw]] = await Promise.all([
-    fn(comptroller, "getAccountLiquidity(address)")(userAddress),
-    fn(comptroller, "getAccountHealthFactor(address)")(userAddress),
+    readWithRetry(() => fn(comptroller, "getAccountLiquidity(address)")(userAddress)),
+    readWithRetry(() => fn(comptroller, "getAccountHealthFactor(address)")(userAddress)),
   ]);
 
   const totalSuppliedUSD = positions.reduce((sum, p) => sum + p.supplyBalanceUSD, 0);
@@ -339,7 +384,8 @@ export async function repayBorrow(
   const signer = await getSigner();
 
   if (market.isNative) {
-    const amount = parseUnits(amountHuman, 18);
+    const baseAmount = parseUnits(amountHuman, 18);
+    const amount = repayFull ? baseAmount + baseAmount / 1000n + 1n : baseAmount;
     const cEth = new Contract(market.cTokenAddress, CETH_ABI, signer);
     const tx = await fn(cEth, "repayBorrow()")({ value: amount });
     return tx.wait();
@@ -429,6 +475,46 @@ export function formatTokenExact(value: string | number, symbol: string): string
 
   return `${raw.replace(/(\.\d*?[1-9])0+$/, "$1").replace(/\.0+$/, "")} ${symbol}`;
 }
+
+export function getTransactionErrorMessage(error: unknown): string {
+  const err = error as {
+    code?: string;
+    reason?: string;
+    shortMessage?: string;
+    message?: string;
+    info?: { error?: { message?: string } };
+  };
+
+  const rawMessage = [
+    err.reason,
+    err.shortMessage,
+    err.info?.error?.message,
+    err.message,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const message = rawMessage.toLowerCase();
+
+  if (err.code === "ACTION_REJECTED" || message.includes("user rejected")) {
+    return "Transaction was rejected in MetaMask.";
+  }
+
+  if (message.includes("insufficient funds")) {
+    return "You do not have enough wallet balance to pay for this transaction and gas.";
+  }
+
+  if (message.includes("missing revert data") || err.code === "CALL_EXCEPTION") {
+    return "The contract rejected this action. Check that you have enough collateral enabled, the amount is within your limit, and the app is using the latest deployed contract addresses.";
+  }
+
+  const revertedMatch = rawMessage.match(/execution reverted(?::| with reason string)?\s*["']?([^"',\n)]*)/i);
+  if (revertedMatch?.[1]) {
+    return `Transaction reverted: ${revertedMatch[1].trim()}`;
+  }
+
+  return err.shortMessage || err.reason || err.message || "Transaction failed";
+}
+
 export function formatHealthFactor(hf: number): string {
   if (!isFinite(hf)) return "∞";
   return hf.toFixed(2);

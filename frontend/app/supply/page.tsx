@@ -18,6 +18,7 @@ import {
   formatUSD,
   formatAPY,
   formatTokenSmart,
+  getTransactionErrorMessage,
   type MarketData,
   type AccountSummary,
 } from "../../lib/protocol";
@@ -56,7 +57,7 @@ function SupplyInner() {
         setWalletBalance(bal);
       }
     } catch (err: unknown) {
-      addToast((err as Error).message, "error");
+      addToast(getTransactionErrorMessage(err), "error");
     } finally {
       setLoading(false);
     }
@@ -80,7 +81,7 @@ function SupplyInner() {
       setAmount("");
       await loadData();
     } catch (err: unknown) {
-      addToast((err as Error).message ?? "Transaction failed", "error");
+      addToast(getTransactionErrorMessage(err), "error");
     } finally {
       setTxLoading(false);
     }
@@ -96,7 +97,7 @@ function SupplyInner() {
       setAmount("");
       await loadData();
     } catch (err: unknown) {
-      addToast((err as Error).message ?? "Transaction failed", "error");
+      addToast(getTransactionErrorMessage(err), "error");
     } finally {
       setTxLoading(false);
     }
@@ -117,7 +118,7 @@ function SupplyInner() {
       }
       await loadData();
     } catch (err: unknown) {
-      addToast((err as Error).message ?? "Transaction failed", "error");
+      addToast(getTransactionErrorMessage(err), "error");
     } finally {
       setTxLoading(false);
     }

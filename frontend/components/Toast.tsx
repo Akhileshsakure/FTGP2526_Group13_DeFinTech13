@@ -65,7 +65,7 @@ export default function Toast({
 }
 
 // ── Hook to manage toasts ─────────────────────────────────────
-import { useState, useCallback } from "react";
+import { useRef, useState, useCallback } from "react";
 
 interface ToastState {
   id: number;
@@ -76,10 +76,12 @@ interface ToastState {
 
 export function useToast() {
   const [toasts, setToasts] = useState<ToastState[]>([]);
+  const nextId = useRef(0);
 
   const addToast = useCallback(
     (message: string, type: ToastType, txHash?: string) => {
-      const id = Date.now();
+      nextId.current += 1;
+      const id = Date.now() * 1000 + nextId.current;
       setToasts((prev) => [...prev, { id, message, type, txHash }]);
     },
     []

@@ -6,6 +6,7 @@ import MarketCard from "../../components/MarketCard";
 import {
   fetchAllMarkets,
   fetchUserPositions,
+  getTransactionErrorMessage,
   type MarketData,
   type AccountSummary,
 } from "../../lib/protocol";
@@ -29,7 +30,7 @@ export default function MarketsPage() {
           setSummary(s);
         }
       } catch (err: unknown) {
-        setError((err as Error).message);
+        setError(getTransactionErrorMessage(err));
       } finally {
         setLoading(false);
       }

@@ -102,7 +102,31 @@ contract CEth is CTokenBase {
     function repayBorrow() external payable nonReentrant returns (uint256) {
         require(msg.value > 0, "zero repay");
         accrueInterest();
-        return _repayBorrowFresh(msg.sender, msg.sender, msg.value);
+
+        uint256 accountBorrowsPrev = borrowBalanceStored(msg.sender);
+        require(accountBorrowsPrev > 0, "no debt");
+
+        uint256 actualRepayAmount = msg.value > accountBorrowsPrev
+            ? accountBorrowsPrev
+            : msg.value;
+
+        uint256 allowed = comptroller.repayBorrowAllowed(address(this), msg.sender, msg.sender, actualRepayAmount);
+        require(allowed == NO_ERROR, "repay not allowed");
+
+        uint256 accountBorrowsNew = accountBorrowsPrev - actualRepayAmount;
+        uint256 totalBorrowsNew = totalBorrows - actualRepayAmount;
+
+        _setBorrowBalance(msg.sender, accountBorrowsNew);
+        totalBorrows = totalBorrowsNew;
+
+        emit RepayBorrow(msg.sender, msg.sender, actualRepayAmount, accountBorrowsNew, totalBorrowsNew);
+
+        if (msg.value > actualRepayAmount) {
+            (bool ok, ) = payable(msg.sender).call{value: msg.value - actualRepayAmount}("");
+            require(ok, "refund failed");
+        }
+
+        return actualRepayAmount;
     }
     
     function mintFor(address beneficiary, uint256 mintAmount)
