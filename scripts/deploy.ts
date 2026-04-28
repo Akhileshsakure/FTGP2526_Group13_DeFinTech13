@@ -105,8 +105,66 @@ async function main() {
   const cDAIAddr = await cDAI.getAddress();
   console.log("   ✓ CErc20 (DAI):", cDAIAddr);
 
-  // ── 7. Router ───────────────────────────────────────
   const SEPOLIA_WETH = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14";
+
+  console.log("\n6b. Deploying CErc20 (WETH)...");
+  const cWETH = await CErc20.deploy(
+    deployer.address,
+    SEPOLIA_WETH,
+    "Compound WETH",
+    "cWETH",
+    comptrollerAddr,
+    strategyAddr,
+    ethers.parseUnits("1", 18),
+    ethers.parseUnits("0.10", 18),
+    ethers.parseUnits("0.0005", 18)
+  );
+  await cWETH.waitForDeployment();
+  const cWETHAddr = await cWETH.getAddress();
+  console.log("   ✓ CErc20 (WETH):", cWETHAddr);
+
+  console.log("\n6c. Deploying Mock WBTC and cWBTC...");
+  const MockERC20 = await ethers.getContractFactory("MockERC20");
+  const wbtc = await MockERC20.deploy("Wrapped Bitcoin", "WBTC", 8);
+  await wbtc.waitForDeployment();
+  const wbtcAddr = await wbtc.getAddress();
+  const cWBTC = await CErc20.deploy(
+    deployer.address,
+    wbtcAddr,
+    "Compound WBTC",
+    "cWBTC",
+    comptrollerAddr,
+    strategyAddr,
+    ethers.parseUnits("1", 18),
+    ethers.parseUnits("0.10", 18),
+    ethers.parseUnits("0.0005", 18)
+  );
+  await cWBTC.waitForDeployment();
+  const cWBTCAddr = await cWBTC.getAddress();
+  console.log("   ✓ Mock WBTC:", wbtcAddr);
+  console.log("   ✓ CErc20 (WBTC):", cWBTCAddr);
+
+  console.log("\n6d. Deploying Mock USDT and cUSDT...");
+  const usdt = await MockERC20.deploy("Tether USD", "USDT", 6);
+  await usdt.waitForDeployment();
+  const usdtAddr = await usdt.getAddress();
+  const cUSDT = await CErc20.deploy(
+    deployer.address,
+    usdtAddr,
+    "Compound USDT",
+    "cUSDT",
+    comptrollerAddr,
+    strategyAddr,
+    ethers.parseUnits("1", 18),
+    ethers.parseUnits("0.10", 18),
+    ethers.parseUnits("0.0005", 18)
+  );
+  await cUSDT.waitForDeployment();
+  const cUSDTAddr = await cUSDT.getAddress();
+  console.log("   ✓ Mock USDT:", usdtAddr);
+  console.log("   ✓ CErc20 (USDT):", cUSDTAddr);
+
+  // ── 7. Router ───────────────────────────────────────
   console.log("\n7. Deploying Router...");
   const Router = await ethers.getContractFactory("CrossMarketLeverageRouter");
   const router = await Router.deploy(
@@ -123,6 +181,9 @@ async function main() {
   await (await oracle.setUnderlyingPrice(cETHAddr,  ethers.parseUnits("3000", 18))).wait();
   await (await oracle.setUnderlyingPrice(cUSDCAddr, ethers.parseUnits("1", 30))).wait();
   await (await oracle.setUnderlyingPrice(cDAIAddr,  ethers.parseUnits("1", 18))).wait();
+  await (await oracle.setUnderlyingPrice(cWETHAddr, ethers.parseUnits("3000", 18))).wait();
+  await (await oracle.setUnderlyingPrice(cWBTCAddr, ethers.parseUnits("65000", 28))).wait();
+  await (await oracle.setUnderlyingPrice(cUSDTAddr, ethers.parseUnits("1", 30))).wait();
   console.log("   ✓ Prices set");
 
   console.log("\n9. Listing markets in Comptroller...");
@@ -144,6 +205,24 @@ async function main() {
     ethers.parseUnits("0.85", 18),
     ethers.parseUnits("1.05", 18)
   )).wait();
+  await (await (comptroller as any)._supportMarket(
+    cWETHAddr,
+    ethers.parseUnits("0.75", 18),
+    ethers.parseUnits("0.80", 18),
+    ethers.parseUnits("1.05", 18)
+  )).wait();
+  await (await (comptroller as any)._supportMarket(
+    cWBTCAddr,
+    ethers.parseUnits("0.70", 18),
+    ethers.parseUnits("0.75", 18),
+    ethers.parseUnits("1.08", 18)
+  )).wait();
+  await (await (comptroller as any)._supportMarket(
+    cUSDTAddr,
+    ethers.parseUnits("0.75", 18),
+    ethers.parseUnits("0.80", 18),
+    ethers.parseUnits("1.05", 18)
+  )).wait();
   console.log("   ✓ Markets listed");
 
   console.log("\n10. Approving Router in cTokens...");
@@ -151,6 +230,9 @@ async function main() {
   await (await (cETH  as any).setRouter(routerAddr, true)).wait();
   await (await (cUSDC as any).setRouter(routerAddr, true)).wait();
   await (await (cDAI  as any).setRouter(routerAddr, true)).wait();
+  await (await (cWETH as any).setRouter(routerAddr, true)).wait();
+  await (await (cWBTC as any).setRouter(routerAddr, true)).wait();
+  await (await (cUSDT as any).setRouter(routerAddr, true)).wait();
   console.log("   ✓ Router approved");
 
   // ── Print addresses ──────────────────────────────────
@@ -165,9 +247,16 @@ async function main() {
     `NEXT_PUBLIC_CETH_ADDRESS=${cETHAddr}`,
     `NEXT_PUBLIC_CUSDC_ADDRESS=${cUSDCAddr}`,
     `NEXT_PUBLIC_CDAI_ADDRESS=${cDAIAddr}`,
+    `NEXT_PUBLIC_CWETH_ADDRESS=${cWETHAddr}`,
+    `NEXT_PUBLIC_CWBTC_ADDRESS=${cWBTCAddr}`,
+    `NEXT_PUBLIC_CUSDT_ADDRESS=${cUSDTAddr}`,
     `NEXT_PUBLIC_ROUTER_ADDRESS=${routerAddr}`,
     `NEXT_PUBLIC_USDC_ADDRESS=${SEPOLIA_USDC}`,
     `NEXT_PUBLIC_DAI_ADDRESS=${SEPOLIA_DAI}`,
+    `NEXT_PUBLIC_WETH_ADDRESS=${SEPOLIA_WETH}`,
+    `NEXT_PUBLIC_WBTC_ADDRESS=${wbtcAddr}`,
+    `NEXT_PUBLIC_USDT_ADDRESS=${usdtAddr}`,
+    "NEXT_PUBLIC_TX_HISTORY_BLOCKS=20",
     "",
   ].join("\n");
 
@@ -182,9 +271,16 @@ async function main() {
   console.log(`NEXT_PUBLIC_CETH_ADDRESS=${cETHAddr}`);
   console.log(`NEXT_PUBLIC_CUSDC_ADDRESS=${cUSDCAddr}`);
   console.log(`NEXT_PUBLIC_CDAI_ADDRESS=${cDAIAddr}`);
+  console.log(`NEXT_PUBLIC_CWETH_ADDRESS=${cWETHAddr}`);
+  console.log(`NEXT_PUBLIC_CWBTC_ADDRESS=${cWBTCAddr}`);
+  console.log(`NEXT_PUBLIC_CUSDT_ADDRESS=${cUSDTAddr}`);
   console.log(`NEXT_PUBLIC_ROUTER_ADDRESS=${routerAddr}`);
   console.log(`NEXT_PUBLIC_USDC_ADDRESS=${SEPOLIA_USDC}`);
   console.log(`NEXT_PUBLIC_DAI_ADDRESS=${SEPOLIA_DAI}`);
+  console.log(`NEXT_PUBLIC_WETH_ADDRESS=${SEPOLIA_WETH}`);
+  console.log(`NEXT_PUBLIC_WBTC_ADDRESS=${wbtcAddr}`);
+  console.log(`NEXT_PUBLIC_USDT_ADDRESS=${usdtAddr}`);
+  console.log("NEXT_PUBLIC_TX_HISTORY_BLOCKS=20");
   console.log(`Saved frontend env file: ${frontendEnvPath}`);
   console.log("=".repeat(60));
 }

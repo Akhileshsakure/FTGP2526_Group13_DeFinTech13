@@ -5,16 +5,8 @@ import "./CTokenBase.sol";
 
 /**
  * @title CEth
- * Code comment
  *
- * Code comment
- * Code comment
- * Code comment
- * Code comment
  *
- * Code comment
- * Code comment
- * Code comment
  */
 contract CEth is CTokenBase {
     uint8 private constant _CETH_DECIMALS = 8;
@@ -40,42 +32,19 @@ contract CEth is CTokenBase {
             borrowRateMaxMantissa_
         )
     {}
-
-    /**
-     * Code comment
-     */
-    function decimals() public pure override returns (uint8) {
+function decimals() public pure override returns (uint8) {
         return _CETH_DECIMALS;
     }
-
-    /**
-     * Code comment
-     * Code comment
-     * Code comment
-     */
-    receive() external payable {}
-
-    /**
-     * Code comment
-     */
-    function getCashPrior() public view override returns (uint256) {
+receive() external payable {}
+function getCashPrior() public view override returns (uint256) {
         return address(this).balance;
     }
-
-    /**
-     * Code comment
-     * Code comment
-     */
-    function doTransferIn(address from, uint256 amount) internal override returns (uint256) {
+function doTransferIn(address from, uint256 amount) internal override returns (uint256) {
         require(msg.sender == from, "sender mismatch");
         require(msg.value == amount, "msg.value mismatch");
         return amount;
     }
-
-    /**
-     * Code comment
-     */
-    function doTransferOut(address payable to, uint256 amount) internal override {
+function doTransferOut(address payable to, uint256 amount) internal override {
         (bool success, ) = to.call{value: amount}("");
         require(success, "eth transfer out failed");
     }
@@ -83,23 +52,13 @@ contract CEth is CTokenBase {
     /*//////////////////////////////////////////////////////////////
                            ETH-SPECIFIC EXTERNALS
     //////////////////////////////////////////////////////////////*/
-
-    /**
-     * Code comment
-     * Code comment
-     */
-    function mint() external payable nonReentrant returns (uint256) {
+function mint() external payable nonReentrant returns (uint256) {
         require(msg.value > 0, "zero mint");
         accrueInterest();
         _mintFresh(msg.sender, msg.value);
         return NO_ERROR;
     }
-
-    /**
-     * Code comment
-     * Code comment
-     */
-    function repayBorrow() external payable nonReentrant returns (uint256) {
+function repayBorrow() external payable nonReentrant returns (uint256) {
         require(msg.value > 0, "zero repay");
         accrueInterest();
 
@@ -185,8 +144,6 @@ contract CEth is CTokenBase {
         totalBorrows = totalBorrowsNew;
 
         emit RepayBorrow(payer, borrower, actualRepayAmount, accountBorrowsNew, totalBorrowsNew);
-
-        // Code comment
         if (msg.value > actualRepayAmount) {
             (bool ok, ) = payable(msg.sender).call{value: msg.value - actualRepayAmount}("");
             require(ok, "refund failed");
@@ -194,21 +151,12 @@ contract CEth is CTokenBase {
 
         return actualRepayAmount;
     }
-    /**
-     * Code comment
-     * Code comment
-     */
-    function repayBorrowBehalf(address borrower) external payable nonReentrant returns (uint256) {
+function repayBorrowBehalf(address borrower) external payable nonReentrant returns (uint256) {
         require(msg.value > 0, "zero repay");
         accrueInterest();
         return _repayBorrowFresh(msg.sender, borrower, msg.value);
     }
-
-    /**
-     * Code comment
-     * Code comment
-     */
-    function liquidateBorrow(address borrower, CTokenBase cTokenCollateral)
+function liquidateBorrow(address borrower, CTokenBase cTokenCollateral)
         external
         payable
         nonReentrant
@@ -243,13 +191,7 @@ contract CEth is CTokenBase {
         emit LiquidateBorrow(msg.sender, borrower, actualRepayAmount, address(cTokenCollateral), seizeTokens);
         return NO_ERROR;
     }
-
-    /**
-     * Code comment
-     * Code comment
-     * Code comment
-     */
-    function leverageUp(uint256 borrowAmount) external payable nonReentrant returns (uint256) {
+function leverageUp(uint256 borrowAmount) external payable nonReentrant returns (uint256) {
         require(msg.value > 0 || borrowAmount > 0, "nothing to do");
         accrueInterest();
 
@@ -271,8 +213,6 @@ contract CEth is CTokenBase {
 
             _setBorrowBalance(msg.sender, accountBorrowsNew);
             totalBorrows += borrowAmount;
-
-            // Code comment
             _mint(msg.sender, loopMintTokens);
 
             mintedCTokens += loopMintTokens;
@@ -284,12 +224,7 @@ contract CEth is CTokenBase {
         emit LeverageUp(msg.sender, msg.value, borrowAmount, mintedCTokens);
         return NO_ERROR;
     }
-
-    /**
-     * Code comment
-     * Code comment
-     */
-    function deleverage(uint256 repayAmount) external override nonReentrant returns (uint256) {
+function deleverage(uint256 repayAmount) external override nonReentrant returns (uint256) {
         require(repayAmount > 0, "zero repay");
         accrueInterest();
 
@@ -315,30 +250,15 @@ contract CEth is CTokenBase {
     /*//////////////////////////////////////////////////////////////
                             DISABLE ERC20-STYLE PAYABLE MINT
     //////////////////////////////////////////////////////////////*/
-
-    /**
-     * Code comment
-     */
-    function mint(uint256) external payable override returns (uint256) {
+function mint(uint256) external payable override returns (uint256) {
         revert("use mint() with msg.value");
     }
-
-    /**
-     * Code comment
-     */
-    function repayBorrow(uint256) external payable override returns (uint256) {
+function repayBorrow(uint256) external payable override returns (uint256) {
         revert("use repayBorrow() with msg.value");
     }
-
-    /**
-     * Code comment
-     */
-    function repayBorrowBehalf(address, uint256) external payable override returns (uint256) {
+function repayBorrowBehalf(address, uint256) external payable override returns (uint256) {
         revert("use repayBorrowBehalf(address) with msg.value");
     }
-    /**
- * Code comment
- */
 function liquidateBorrow(address, uint256, CTokenBase)
     external
     payable
@@ -347,10 +267,6 @@ function liquidateBorrow(address, uint256, CTokenBase)
 {
     revert("use liquidateBorrow(address,CTokenBase) with msg.value");
 }
-
-/**
- * Code comment
- */
 function leverageUp(uint256, uint256)
     external
     payable

@@ -1,11 +1,13 @@
 // lib/transactions.ts
 // Read user protocol activity from cToken and Comptroller events.
 
-import { Contract, EventLog, Log, TransactionResponse, ethers } from "ethers";
-import { ADDRESSES, COMPTROLLER_ABI, MARKETS, getCTokenABI, type MarketConfig } from "./contracts";
+import { Log, TransactionResponse, ethers } from "ethers";
+import { ADDRESSES, MARKETS, type MarketConfig } from "./contracts";
 import { formatUnits, getReadProvider, shortAddress } from "./ethers";
 
-const DEFAULT_HISTORY_BLOCKS = 75_000;
+const DEFAULT_HISTORY_BLOCKS = 20;
+const LOG_CHUNK_BLOCKS = 10;
+const LOG_QUERY_DELAY_MS = 150;
 const EVENT_ABI = [
   "event Mint(address indexed minter, uint256 mintAmount, uint256 mintTokens)",
   "event Redeem(address indexed redeemer, uint256 redeemAmount, uint256 redeemTokens)",
@@ -14,6 +16,7 @@ const EVENT_ABI = [
   "event MarketEntered(address cToken, address account)",
   "event MarketExited(address cToken, address account)",
 ] as const;
+const EVENT_IFACE = new ethers.Interface(EVENT_ABI);
 
 export type TransactionType =
   | "Supply"
@@ -47,8 +50,8 @@ function historyBlockWindow(): number {
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_HISTORY_BLOCKS;
 }
 
-function isEventLog(log: EventLog | Log): log is EventLog {
-  return "args" in log && "eventName" in log;
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function sameAddress(left: string | null | undefined, right: string | null | undefined): boolean {
@@ -61,22 +64,6 @@ function formatAmount(value: bigint, market: MarketConfig): string {
 
 function getMarketByCToken(address: string): MarketConfig | undefined {
   return MARKETS.find((market) => sameAddress(market.cTokenAddress, address));
-}
-
-function getProtocolEvents(contract: Contract, userAddress: string, market?: MarketConfig) {
-  if (market) {
-    return [
-      contract.filters.Mint(userAddress),
-      contract.filters.Redeem(userAddress),
-      contract.filters.Borrow(userAddress),
-      contract.filters.RepayBorrow(null, userAddress),
-    ];
-  }
-
-  return [
-    contract.filters.MarketEntered(),
-    contract.filters.MarketExited(),
-  ];
 }
 
 async function getTransactionMeta(txHash: string) {
@@ -93,9 +80,37 @@ async function getTransactionMeta(txHash: string) {
   };
 }
 
-function parseUserEvent(log: EventLog, market: MarketConfig): Omit<UserTransaction, "timestamp" | "from" | "to" | "value" | "gasUsed" | "status"> | null {
-  const eventName = log.eventName;
-  const args = log.args;
+function parseProtocolLog(log: Log, userAddress: string): Omit<UserTransaction, "timestamp" | "from" | "to" | "value" | "gasUsed" | "status"> | null {
+  const parsed = EVENT_IFACE.parseLog({
+    topics: [...log.topics],
+    data: log.data,
+  });
+  if (!parsed) return null;
+
+  const eventName = parsed.name;
+  const args = parsed.args;
+  const market = getMarketByCToken(log.address);
+
+  if ((eventName === "MarketEntered" || eventName === "MarketExited") && sameAddress(args.account, userAddress)) {
+    const collateralMarket = getMarketByCToken(args.cToken);
+    if (!collateralMarket) return null;
+
+    return {
+      id: `${log.transactionHash}-${log.index}`,
+      type: eventName === "MarketEntered" ? "Enable Collateral" : "Disable Collateral",
+      market: collateralMarket,
+      amount: null,
+      tokenAmount: null,
+      userAddress: args.account,
+      counterpartyAddress: null,
+      contractAddress: log.address,
+      transactionHash: log.transactionHash,
+      blockNumber: log.blockNumber,
+    };
+  }
+
+  if (!market) return null;
+
   const base = {
     id: `${log.transactionHash}-${log.index}`,
     market,
@@ -107,6 +122,7 @@ function parseUserEvent(log: EventLog, market: MarketConfig): Omit<UserTransacti
   };
 
   if (eventName === "Mint") {
+    if (!sameAddress(args.minter, userAddress)) return null;
     return {
       ...base,
       type: "Supply",
@@ -117,6 +133,7 @@ function parseUserEvent(log: EventLog, market: MarketConfig): Omit<UserTransacti
   }
 
   if (eventName === "Redeem") {
+    if (!sameAddress(args.redeemer, userAddress)) return null;
     return {
       ...base,
       type: "Withdraw",
@@ -127,6 +144,7 @@ function parseUserEvent(log: EventLog, market: MarketConfig): Omit<UserTransacti
   }
 
   if (eventName === "Borrow") {
+    if (!sameAddress(args.borrower, userAddress)) return null;
     return {
       ...base,
       type: "Borrow",
@@ -137,6 +155,9 @@ function parseUserEvent(log: EventLog, market: MarketConfig): Omit<UserTransacti
   }
 
   if (eventName === "RepayBorrow") {
+    if (!sameAddress(args.borrower, userAddress) && !sameAddress(args.payer, userAddress)) {
+      return null;
+    }
     return {
       ...base,
       type: "Repay",
@@ -150,25 +171,27 @@ function parseUserEvent(log: EventLog, market: MarketConfig): Omit<UserTransacti
   return null;
 }
 
-function parseComptrollerEvent(log: EventLog): Omit<UserTransaction, "timestamp" | "from" | "to" | "value" | "gasUsed" | "status"> | null {
-  const market = getMarketByCToken(log.args.cToken);
-  if (!market) return null;
+async function fetchProtocolLogs(fromBlock: number, latestBlock: number): Promise<Log[]> {
+  const provider = getReadProvider();
+  const addresses = [
+    ...MARKETS.map((market) => market.cTokenAddress),
+    ADDRESSES.comptroller,
+  ].filter((address): address is string => Boolean(address));
+  const logs: Log[] = [];
 
-  const type: TransactionType =
-    log.eventName === "MarketEntered" ? "Enable Collateral" : "Disable Collateral";
+  for (let start = fromBlock; start <= latestBlock; start += LOG_CHUNK_BLOCKS) {
+    const end = Math.min(start + LOG_CHUNK_BLOCKS - 1, latestBlock);
+    logs.push(
+      ...(await provider.getLogs({
+        address: addresses,
+        fromBlock: start,
+        toBlock: end,
+      }))
+    );
+    await wait(LOG_QUERY_DELAY_MS);
+  }
 
-  return {
-    id: `${log.transactionHash}-${log.index}`,
-    type,
-    market,
-    amount: null,
-    tokenAmount: null,
-    userAddress: log.args.account,
-    counterpartyAddress: null,
-    contractAddress: log.address,
-    transactionHash: log.transactionHash,
-    blockNumber: log.blockNumber,
-  };
+  return logs;
 }
 
 async function enrichTransaction(
@@ -193,40 +216,11 @@ export async function fetchUserTransactions(userAddress: string): Promise<UserTr
   const latestBlock = await provider.getBlockNumber();
   const fromBlock = Math.max(0, latestBlock - historyBlockWindow());
 
-  const marketLogs = await Promise.all(
-    MARKETS.map(async (market) => {
-      const contract = new Contract(
-        market.cTokenAddress,
-        [...getCTokenABI(market), ...EVENT_ABI],
-        provider
-      );
-      const filters = getProtocolEvents(contract, userAddress, market);
-      const logs = await Promise.all(filters.map((filter) => contract.queryFilter(filter, fromBlock, latestBlock)));
-      return logs.flatMap((eventLog) =>
-        eventLog.filter(isEventLog).flatMap((log) => {
-          const parsed = parseUserEvent(log, market);
-          return parsed ? [parsed] : [];
-        })
-      );
-    })
-  );
-
-  const comptroller = new Contract(ADDRESSES.comptroller, [...COMPTROLLER_ABI, ...EVENT_ABI], provider);
-  const comptrollerLogs = await Promise.all(
-    getProtocolEvents(comptroller, userAddress).map((filter) =>
-      comptroller.queryFilter(filter, fromBlock, latestBlock)
-    )
-  );
-
   const parsed = [
-    ...marketLogs.flat(),
-    ...comptrollerLogs.flatMap((eventLog) =>
-      eventLog.filter(isEventLog).flatMap((log) => {
-        if (!sameAddress(log.args.account, userAddress)) return [];
-        const parsedLog = parseComptrollerEvent(log);
-        return parsedLog ? [parsedLog] : [];
-      })
-    ),
+    ...(await fetchProtocolLogs(fromBlock, latestBlock)).flatMap((log) => {
+      const parsedLog = parseProtocolLog(log, userAddress);
+      return parsedLog ? [parsedLog] : [];
+    }),
   ].sort((a, b) => b.blockNumber - a.blockNumber);
 
   const blockTimes = new Map<number, number | null>();

@@ -3,6 +3,7 @@
 
 const SEPOLIA_USDC = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
 const SEPOLIA_DAI = "0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6";
+const SEPOLIA_WETH = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14";
 
 export const ADDRESSES = {
   comptroller: process.env.NEXT_PUBLIC_COMPTROLLER_ADDRESS as string,
@@ -12,9 +13,15 @@ export const ADDRESSES = {
   cETH: process.env.NEXT_PUBLIC_CETH_ADDRESS as string,
   cUSDC: process.env.NEXT_PUBLIC_CUSDC_ADDRESS as string,
   cDAI: process.env.NEXT_PUBLIC_CDAI_ADDRESS as string,
+  cWBTC: process.env.NEXT_PUBLIC_CWBTC_ADDRESS as string,
+  cWETH: process.env.NEXT_PUBLIC_CWETH_ADDRESS as string,
+  cUSDT: process.env.NEXT_PUBLIC_CUSDT_ADDRESS as string,
 
   USDC: process.env.NEXT_PUBLIC_USDC_ADDRESS || SEPOLIA_USDC,
   DAI: process.env.NEXT_PUBLIC_DAI_ADDRESS || SEPOLIA_DAI,
+  WBTC: process.env.NEXT_PUBLIC_WBTC_ADDRESS as string,
+  WETH: process.env.NEXT_PUBLIC_WETH_ADDRESS || SEPOLIA_WETH,
+  USDT: process.env.NEXT_PUBLIC_USDT_ADDRESS as string,
 } as const;
 
 export interface MarketConfig {
@@ -62,6 +69,39 @@ export const MARKETS: MarketConfig[] = [
     decimals: 18,
     icon: "◇",
     collateralFactor: 80,
+  },
+  {
+    id: "wbtc",
+    name: "Wrapped Bitcoin",
+    symbol: "WBTC",
+    cTokenAddress: ADDRESSES.cWBTC,
+    underlyingAddress: ADDRESSES.WBTC,
+    isNative: false,
+    decimals: 8,
+    icon: "B",
+    collateralFactor: 70,
+  },
+  {
+    id: "weth",
+    name: "Wrapped Ether",
+    symbol: "WETH",
+    cTokenAddress: ADDRESSES.cWETH,
+    underlyingAddress: ADDRESSES.WETH,
+    isNative: false,
+    decimals: 18,
+    icon: "W",
+    collateralFactor: 75,
+  },
+  {
+    id: "usdt",
+    name: "Tether USD",
+    symbol: "USDT",
+    cTokenAddress: ADDRESSES.cUSDT,
+    underlyingAddress: ADDRESSES.USDT,
+    isNative: false,
+    decimals: 6,
+    icon: "T",
+    collateralFactor: 75,
   },
 ];
 
@@ -138,6 +178,7 @@ export const ERC20_ABI = [
 export const ORACLE_ABI = [
   "function getUnderlyingPrice(address) view returns (uint256)",
   "function prices(address) view returns (uint256)",
+  "function getPriceHistory(address) view returns ((uint256 price,uint256 timestamp)[])",
 ] as const;
 
 export const INTEREST_STRATEGY_ABI = [

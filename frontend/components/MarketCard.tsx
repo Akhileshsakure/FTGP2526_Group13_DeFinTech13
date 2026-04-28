@@ -8,11 +8,20 @@ interface MarketCardProps {
   data: MarketData;
   userSupply?: number;
   userBorrow?: number;
+  purchasePrice?: number;
+  onViewMarket?: () => void;
 }
 
-export default function MarketCard({ data, userSupply, userBorrow }: MarketCardProps) {
+export default function MarketCard({
+  data,
+  userSupply,
+  userBorrow,
+  purchasePrice,
+  onViewMarket,
+}: MarketCardProps) {
   const { market, supplyAPY, borrowAPY, totalSupply, totalBorrows, utilizationRate, priceUSD } =
     data;
+  const hasPosition = (userSupply ?? 0) > 0 || (userBorrow ?? 0) > 0;
 
   return (
     <div className="card p-5 hover:shadow-md transition-shadow">
@@ -95,8 +104,26 @@ export default function MarketCard({ data, userSupply, userBorrow }: MarketCardP
         </div>
       </div>
 
+      {hasPosition && (
+        <div className="mb-4 rounded border border-stone-100 bg-stone-50 px-3 py-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-stone-500">Holding price</span>
+            <span className="font-mono text-stone-700">{formatUSD(priceUSD)}</span>
+          </div>
+          {purchasePrice !== undefined && (
+            <div className="mt-1 flex items-center justify-between text-xs">
+              <span className="text-stone-500">Purchase price</span>
+              <span className="font-mono text-amber-700">{formatUSD(purchasePrice)}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Actions */}
-      <div className="flex gap-2">
+      <div className="grid grid-cols-3 gap-2">
+        <button type="button" onClick={onViewMarket} className="btn btn-ghost text-sm py-2">
+          View
+        </button>
         <Link href={`/supply?market=${market.id}`} className="btn btn-primary flex-1 text-sm py-2">
           Supply
         </Link>

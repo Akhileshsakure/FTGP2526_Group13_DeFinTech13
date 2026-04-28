@@ -1,0 +1,7 @@
+.env 
+node_modules/ 
+artifacts/ 
+cache/ 
+types/ 
+frontend/.next/ 
+frontend/node_modules/ 

@@ -16,13 +16,7 @@ interface IERC20NonStandard {
 
 /**
  * @title CErc20
- * Code comment
  *
- * Code comment
- * Code comment
- * Code comment
- * Code comment
- * Code comment
  */
 contract CErc20 is CTokenBase {
     using SafeERC20 for IERC20;
@@ -56,27 +50,13 @@ contract CErc20 is CTokenBase {
         underlying = underlying_;
         _underlyingDecimals = IERC20Metadata(address(underlying_)).decimals();
     }
-
-    /**
-     * Code comment
-     * Code comment
-     */
-    function decimals() public view override returns (uint8) {
+function decimals() public view override returns (uint8) {
         return _underlyingDecimals;
     }
-
-    /**
-     * Code comment
-     */
-    function getCashPrior() public view override returns (uint256) {
+function getCashPrior() public view override returns (uint256) {
         return underlying.balanceOf(address(this));
     }
-
-    /**
-     * Code comment
-     * Code comment
-     */
-    function doTransferIn(address from, uint256 amount) internal override returns (uint256) {
+function doTransferIn(address from, uint256 amount) internal override returns (uint256) {
         require(msg.value == 0, "msg.value not allowed");
 
         uint256 balanceBefore = underlying.balanceOf(address(this));
@@ -86,11 +66,7 @@ contract CErc20 is CTokenBase {
         require(balanceAfter >= balanceBefore, "balance overflow");
         return balanceAfter - balanceBefore;
     }
-
-    /**
-     * Code comment
-     */
-    function doTransferOut(address payable to, uint256 amount) internal override {
+function doTransferOut(address payable to, uint256 amount) internal override {
         require(msg.value == 0, "msg.value not allowed");
         underlying.safeTransfer(to, amount);
     }

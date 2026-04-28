@@ -46,16 +46,9 @@ interface IInterestRateStrategyLike {
 
 /**
  * @title CTokenBase
- * Code comment
  *
- * Code comment
- * Code comment
  *   mint / redeem / redeemUnderlying / borrow / repayBorrow / repayBorrowBehalf
  *   exchangeRateCurrent / exchangeRateStored / borrowBalanceCurrent / borrowBalanceStored
- * Code comment
- * Code comment
- * Code comment
- * Code comment
  */
 abstract contract CTokenBase is ERC20, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
@@ -437,13 +430,7 @@ abstract contract CTokenBase is ERC20, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                              LEVERAGE EXTENSION
     //////////////////////////////////////////////////////////////*/
-
-    /**
-     * Code comment
-     * Code comment
-     * Code comment
-     */
-    function leverageUp(uint256 marginIn, uint256 borrowAmount) external payable  virtual nonReentrant returns (uint256) {
+function leverageUp(uint256 marginIn, uint256 borrowAmount) external payable  virtual nonReentrant returns (uint256) {
         require(marginIn > 0 || borrowAmount > 0, "nothing to do");
         accrueInterest();
 
@@ -465,8 +452,6 @@ abstract contract CTokenBase is ERC20, ReentrancyGuard {
 
             _setBorrowBalance(msg.sender, accountBorrowsNew);
             totalBorrows += borrowAmount;
-
-            // Code comment
             _mint(msg.sender, loopMintTokens);
 
             mintedCTokens += loopMintTokens;
@@ -478,12 +463,7 @@ abstract contract CTokenBase is ERC20, ReentrancyGuard {
         emit LeverageUp(msg.sender, marginIn, borrowAmount, mintedCTokens);
         return NO_ERROR;
     }
-
-    /**
-     * Code comment
-     * Code comment
-     */
-    function deleverage(uint256 repayAmount) external virtual nonReentrant returns (uint256) {
+function deleverage(uint256 repayAmount) external virtual nonReentrant returns (uint256) {
         require(repayAmount > 0, "zero repay");
         accrueInterest();
 
@@ -651,21 +631,9 @@ abstract contract CTokenBase is ERC20, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                            ABSTRACT TOKEN LAYER
     //////////////////////////////////////////////////////////////*/
-
-    /**
-     * Code comment
-     */
-    function getCashPrior() public view virtual returns (uint256);
-
-    /**
-     * Code comment
-     */
-    function doTransferIn(address from, uint256 amount) internal virtual returns (uint256);
-
-    /**
-     * Code comment
-     */
-    function doTransferOut(address payable to, uint256 amount) internal virtual;
+function getCashPrior() public view virtual returns (uint256);
+function doTransferIn(address from, uint256 amount) internal virtual returns (uint256);
+function doTransferOut(address payable to, uint256 amount) internal virtual;
     
     function mintFor(address beneficiary, uint256 mintAmount)
         external

@@ -33,11 +33,7 @@ interface IRouterCEthLike {
 }
 
 interface ISwapAdapter {
-    /**
-     * Code comment
-     * Code comment
-     */
-    function swap(
+function swap(
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
@@ -49,21 +45,9 @@ interface ISwapAdapter {
 
 /**
  * @title CrossMarketLeverageRouter
- * Code comment
  *
- * Code comment
- * Code comment
- * Code comment
- * Code comment
- * Code comment
  *
- * Code comment
- * Code comment
- * Code comment
  *
- * Code comment
- * Code comment
- * Code comment
  */
 contract CrossMarketLeverageRouter is ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -114,8 +98,8 @@ contract CrossMarketLeverageRouter is ReentrancyGuard {
         bool borrowIsNative;
         uint256 borrowAmount;
 
-        address swapAdapter;   // Code comment
-        address tokenOut;      // Code comment
+        address swapAdapter;
+        address tokenOut;
         uint256 minAmountOut;
         bytes swapData;
 
@@ -168,16 +152,7 @@ contract CrossMarketLeverageRouter is ReentrancyGuard {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * Code comment
      *
-     * Code comment
-     * Code comment
-     * Code comment
-     * Code comment
-     * Code comment
-     * Code comment
-     * Code comment
-     * Code comment
      */
     function loopLeverage(
         InitialSupplyParams calldata initialSupply,
@@ -186,8 +161,6 @@ contract CrossMarketLeverageRouter is ReentrancyGuard {
         uint256 nativeValueRemaining = msg.value;
         address[] memory marketsToEnter = new address[](steps.length + 1);
         uint256 marketCount = 0;
-
-        // Code comment
         if (initialSupply.amount > 0) {
             if (initialSupply.isNative) {
                 require(nativeValueRemaining >= initialSupply.amount, "insufficient msg.value");
@@ -212,8 +185,6 @@ contract CrossMarketLeverageRouter is ReentrancyGuard {
                 marketCount++;
             }
         }
-
-        // Code comment
         uint256 stepLen = steps.length;
         for (uint256 i = 0; i < stepLen; i++) {
             LoopStep calldata step = steps[i];
@@ -228,7 +199,6 @@ contract CrossMarketLeverageRouter is ReentrancyGuard {
             uint256 amountToSupply;
 
             if (step.swapAdapter == address(0)) {
-                // Code comment
                 amountToSupply = borrowedAmount;
             } else {
                 require(approvedSwapAdapters[step.swapAdapter], "swap adapter not approved");
@@ -265,8 +235,6 @@ contract CrossMarketLeverageRouter is ReentrancyGuard {
             }
             comptroller.enterMarketsFor(msg.sender, finalMarkets);
         }
-
-        // Code comment
         if (nativeValueRemaining > 0) {
             (bool ok, ) = payable(msg.sender).call{value: nativeValueRemaining}("");
             require(ok, "refund failed");
@@ -324,7 +292,6 @@ contract CrossMarketLeverageRouter is ReentrancyGuard {
         address tokenIn;
 
         if (step.borrowIsNative) {
-            // Code comment
             wrappedNative.deposit{value: amountIn}();
             tokenIn = address(wrappedNative);
 
@@ -364,7 +331,6 @@ contract CrossMarketLeverageRouter is ReentrancyGuard {
         require(amount > 0, "zero supply amount");
 
         if (supplyIsNative) {
-            // Code comment
             uint256 ethBalance = address(this).balance;
             if (ethBalance < amount) {
                 uint256 wethBalance = wrappedNative.balanceOf(address(this));

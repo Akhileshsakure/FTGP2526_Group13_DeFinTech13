@@ -17,7 +17,6 @@ export default function Navbar() {
     { href: "/markets", label: "Markets" },
     { href: "/supply", label: "Supply" },
     { href: "/borrow", label: "Borrow" },
-    { href: "/transactions", label: "Transactions" },
   ];
 
   return (

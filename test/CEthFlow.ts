@@ -13,11 +13,7 @@ describe("CEth simple flow", async () => {
     async function waitTx(hash: `0x${string}`) {
       return await publicClient.waitForTransactionReceipt({ hash });
     }
-
-    // Code comment
     const oracle = await viem.deployContract("MockPriceOracle");
-
-    // Code comment
     const interestRateModel = await viem.deployContract(
       "AaveInterestRateStrategy",
       [
@@ -28,15 +24,11 @@ describe("CEth simple flow", async () => {
         parseEther("3"),     // variableRateSlope2 = 300%
       ]
     );
-
-    // Code comment
     const comptroller = await viem.deployContract("Comptroller", [
       deployer.account.address,
       oracle.address,
       parseEther("0.5"),   // closeFactor = 50%
     ]);
-
-    // Code comment
     const cEth = await viem.deployContract("CEth", [
       deployer.account.address,
       "Compound ETH",
@@ -45,10 +37,8 @@ describe("CEth simple flow", async () => {
       interestRateModel.address,
       parseEther("1"),        // initialExchangeRateMantissa
       parseEther("0.1"),      // reserveFactorMantissa = 10%
-      parseEther("0.000001"), // Code comment
+      parseEther("0.000001"),
     ]);
-
-    // Code comment
     await waitTx(
       await oracle.write.setUnderlyingPrice(
         [cEth.address, parseEther("3000")],
@@ -67,31 +57,23 @@ describe("CEth simple flow", async () => {
         { account: deployer.account }
       )
     );
-
-    // Code comment
     await waitTx(
       await cEth.write.mint([], {
         account: supplier.account,
         value: parseEther("10"),
       })
     );
-
-    // Code comment
     await waitTx(
       await cEth.write.mint([], {
         account: borrower.account,
         value: parseEther("2"),
       })
     );
-
-    // Code comment
     await waitTx(
       await comptroller.write.enterMarkets([[cEth.address]], {
         account: borrower.account,
       })
     );
-
-    // Code comment
     await waitTx(
       await cEth.write.borrow([parseEther("0.5")], {
         account: borrower.account,
@@ -107,8 +89,6 @@ describe("CEth simple flow", async () => {
       parseEther("0.5"),
       "borrow balance should be 0.5 ETH"
     );
-
-    // Code comment
     await waitTx(
       await cEth.write.repayBorrow([], {
         account: borrower.account,
@@ -124,8 +104,6 @@ describe("CEth simple flow", async () => {
       borrowFinal < 100000000000n,
       "borrow balance should be almost 0 after repay"
     );
-
-    // Code comment
     const cEthBalance = await cEth.read.balanceOf([
       borrower.account.address,
     ]);

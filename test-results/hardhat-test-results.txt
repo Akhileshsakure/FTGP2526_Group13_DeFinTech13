@@ -17,36 +17,54 @@ Running Mocha tests
 
 WARNING: hre.network.connect() is deprecated and will be removed in a future version. Use hre.network.create() or hre.network.getOrCreate() instead.
 ▶ Aave Advanced Features Tests
-  ✔ should enforce supply and borrow caps (2121.8188ms)
-  ✔ should restrict borrowing based on LTV but liquidate based on Health Factor (50.827ms)
-  ✔ should block operations when market is paused (38.3537ms)
-✔ Aave Advanced Features Tests (2212.1544ms)
+  ✔ should enforce supply and borrow caps (2219.6304ms)
+  ✔ should restrict borrowing based on LTV but liquidate based on Health Factor (49.7761ms)
+  ✔ should block operations when market is paused (37.4635ms)
+✔ Aave Advanced Features Tests (2309.4077ms)
+▶ Advanced lending protocol
+  ✔ opens a perpetual cross-asset position, values PnL, and closes it (67.929ms)
+  ✔ charges liquidity-sensitive instant redemption fees and blocks instant exits in shutdown (81.5726ms)
+  ✔ executes scheduled redemptions pro-rata when liquidity is short (75.1501ms)
+  ✔ lets users cancel scheduled redemption early with a penalty (48.5503ms)
+  ✔ blocks new positions during emergency shutdown while allowing existing positions to close (68.3751ms)
+✔ Advanced lending protocol (342.1908ms)
 ▶ CEth simple flow
-  ✔ should deploy, supply, borrow and repay (24.8978ms)
-✔ CEth simple flow (25.0506ms)
+  ✔ should deploy, supply, borrow and repay (25.5251ms)
+  ✔ should close ETH debt when full repay sends a small overpayment (24.3924ms)
+✔ CEth simple flow (50.1422ms)
 ▶ Counter
-  ✔ Should emit the Increment event when calling the inc() function (3.9824ms)
-  ✔ The sum of the Increment events should match the current value (11.7203ms)
-✔ Counter (15.9834ms)
+  ✔ Should emit the Increment event when calling the inc() function (3.7966ms)
+  ✔ The sum of the Increment events should match the current value (11.0338ms)
+✔ Counter (14.9847ms)
+▶ Extended markets and deployment configuration
+  ✔ supports WBTC collateral and USDT borrowing with independent decimals and risk parameters (75.4468ms)
+  ✔ uses Chainlink oracle protections for ownership, missing feeds, and stale feeds (10.6867ms)
+  ✔ raises borrow rates as utilization increases in the jump rate model (4.154ms)
+  ✔ keeps multi-asset market and Chainlink deployment configuration in sync (0.7095ms)
+✔ Extended markets and deployment configuration (91.2599ms)
 ▶ More lending flows
-  ✔ redeem: should mint ETH and redeem part of it (18.545ms)
-  ✔ CErc20: should deposit, borrow and repay ERC20 (59.9825ms)
-  ✔ liquidation: should become shortfall after price drop and be liquidated (39.6415ms)
-✔ More lending flows (118.4681ms)
+  ✔ redeem: should mint ETH and redeem part of it (18.0378ms)
+  ✔ CErc20: should deposit, borrow and repay ERC20 (34.564ms)
+  ✔ liquidation: should become shortfall after price drop and be liquidated (39.4158ms)
+✔ More lending flows (92.3168ms)
+▶ Oracle implementations
+  ✔ uses MockPriceOracle for tests (5.1462ms)
+  ✔ uses ChainlinkPriceOracle for production feeds with stale-price checks (7.6358ms)
+✔ Oracle implementations (12.93ms)
 ▶ Security and edge-case tests
-  ✔ should prevent non-admin users from changing market caps (18.4972ms)
-  ✔ should prevent non-admin users from pausing a market (19.4355ms)
-  ✔ should reject zero amount operations (23.9239ms)
-  ✔ should reject borrowing without collateral (21.117ms)
-  ✔ should reject redeem that would make account undercollateralized (41.7318ms)
-  ✔ should reject oracle price of zero in liquidity-sensitive paths (46.0299ms)
-  ✔ should reject zero router addresses (27.6231ms)
-✔ Security and edge-case tests (198.9599ms)
-ℹ tests 16
-ℹ suites 5
-ℹ pass 16
+  ✔ should prevent non-admin users from changing market caps (17.5343ms)
+  ✔ should prevent non-admin users from pausing a market (18.8455ms)
+  ✔ should reject zero amount operations (22.8794ms)
+  ✔ should reject borrowing without collateral (21.2603ms)
+  ✔ should reject redeem that would make account undercollateralized (29.0805ms)
+  ✔ should reject oracle price of zero in liquidity-sensitive paths (26.5819ms)
+  ✔ should reject zero router addresses (53.6302ms)
+✔ Security and edge-case tests (190.5078ms)
+ℹ tests 28
+ℹ suites 8
+ℹ pass 28
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 2574.5176
+ℹ duration_ms 3109.7854

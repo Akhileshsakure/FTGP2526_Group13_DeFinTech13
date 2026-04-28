@@ -125,7 +125,8 @@ async function getMarketData(market: MarketConfig, provider: JsonRpcProvider) {
 export async function GET() {
   try {
     const provider = getProvider();
-    const results = await Promise.all(MARKETS.map((m) => getMarketData(m, provider)));
+    const configuredMarkets = MARKETS.filter((market) => Boolean(market.cTokenAddress));
+    const results = await Promise.all(configuredMarkets.map((m) => getMarketData(m, provider)));
 
     return NextResponse.json(
       { success: true, data: results, timestamp: Date.now() },

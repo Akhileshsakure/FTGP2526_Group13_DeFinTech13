@@ -11,7 +11,6 @@ interface IInterestRateStrategyLike {
 
 /**
  * @title JumpRateInterestStrategy
- * Code comment
  *
  * Interest Rate Model:
  *

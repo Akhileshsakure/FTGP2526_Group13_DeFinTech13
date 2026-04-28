@@ -2,6 +2,7 @@
 // app/page.tsx — Dashboard
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import TransactionHistoryPanel from "../../components/TransactionHistoryPanel";
 import { useWallet } from "../../context/WalletContext";
 import {
   fetchAllMarkets,
@@ -21,17 +22,24 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<AccountSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [positionError, setPositionError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setPositionError(null);
       try {
         const md = await fetchAllMarkets();
         setMarkets(md);
         if (account && isCorrectNetwork) {
-          const s = await fetchUserPositions(account, md);
-          setSummary(s);
+          try {
+            const s = await fetchUserPositions(account, md);
+            setSummary(s);
+          } catch {
+            setSummary(null);
+            setPositionError("Wallet positions could not be loaded yet. Market data is still available.");
+          }
         } else {
           setSummary(null);
         }
@@ -142,6 +150,12 @@ export default function Dashboard() {
             </div>
           )}
 
+          {positionError && !error && (
+            <div className="card p-4 border-amber-200 bg-amber-50 text-amber-700 text-sm mb-6">
+              {positionError}
+            </div>
+          )}
+
           <div className="card overflow-hidden">
             <div className="px-5 py-3 border-b border-stone-100">
               <span className="font-medium text-sm text-stone-700">Your Positions</span>
@@ -219,6 +233,10 @@ export default function Dashboard() {
                     );
                   })}
             </div>
+          </div>
+
+          <div className="mt-8">
+            <TransactionHistoryPanel compact />
           </div>
         </>
       )}

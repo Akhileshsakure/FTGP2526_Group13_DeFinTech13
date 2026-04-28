@@ -118,8 +118,6 @@ describe("More lending flows", async () => {
       parseEther("0.1"),
       parseEther("0.000001"),
     ]);
-
-    // Code comment
     await waitTx(
       await oracle.write.setUnderlyingPrice(
         [cErc20.address, parseEther("1")], // MTK = 1 USD
@@ -133,11 +131,9 @@ describe("More lending flows", async () => {
         { account: deployer.account }
       )
     );
-
-    // Code comment
     await waitTx(
       await comptroller.write._supportMarket(
-        [cErc20.address, parseEther("0.75"), parseEther("0.8"), parseEther("1.05")], // Code comment
+        [cErc20.address, parseEther("0.75"), parseEther("0.8"), parseEther("1.05")],
         { account: deployer.account }
       )
     );
@@ -168,16 +164,12 @@ describe("More lending flows", async () => {
 
   it("redeem: should mint ETH and redeem part of it", async () => {
     const { waitTx, supplier, borrower, cEth } = await setupCEthOnly();
-
-    // Code comment
     await waitTx(
       await cEth.write.mint([], {
         account: supplier.account,
         value: parseEther("10"),
       })
     );
-
-    // Code comment
     await waitTx(
       await cEth.write.mint([], {
         account: borrower.account,
@@ -188,8 +180,6 @@ describe("More lending flows", async () => {
     const beforeBalance = await cEth.read.balanceOf([
       borrower.account.address,
     ]);
-
-    // Code comment
     await waitTx(
       await cEth.write.redeemUnderlying([parseEther("1")], {
         account: borrower.account,
@@ -206,8 +196,6 @@ describe("More lending flows", async () => {
   it("CErc20: should deposit, borrow and repay ERC20", async () => {
     const { waitTx, supplier, borrower, token, cErc20, comptroller } =
       await setupWithERC20AndCEth();
-
-    // Code comment
     await waitTx(
       await token.write.mint([supplier.account.address, parseEther("5000")], {
         account: supplier.account,
@@ -219,8 +207,6 @@ describe("More lending flows", async () => {
         account: borrower.account,
       })
     );
-
-    // Code comment
     await waitTx(
       await token.write.approve([cErc20.address, parseEther("5000")], {
         account: supplier.account,
@@ -232,8 +218,6 @@ describe("More lending flows", async () => {
         account: supplier.account,
       })
     );
-
-    // Code comment
     await waitTx(
       await token.write.approve([cErc20.address, parseEther("1000")], {
         account: borrower.account,
@@ -245,15 +229,11 @@ describe("More lending flows", async () => {
         account: borrower.account,
       })
     );
-
-    // Code comment
     await waitTx(
       await comptroller.write.enterMarkets([[cErc20.address]], {
         account: borrower.account,
       })
     );
-
-    // Code comment
     await waitTx(
       await cErc20.write.borrow([parseEther("400")], {
         account: borrower.account,
@@ -265,8 +245,6 @@ describe("More lending flows", async () => {
     ]);
 
     assert.equal(borrowAfter, parseEther("400"));
-
-    // Code comment
     await waitTx(
       await token.write.approve([cErc20.address, parseEther("400")], {
         account: borrower.account,
@@ -298,8 +276,6 @@ describe("More lending flows", async () => {
       comptroller,
       oracle,
     } = await setupWithERC20AndCEth();
-
-    // Code comment
     await waitTx(
       await token.write.mint([borrower.account.address, parseEther("2000")], {
         account: borrower.account,
@@ -311,16 +287,12 @@ describe("More lending flows", async () => {
         account: liquidator.account,
       })
     );
-
-    // Code comment
     await waitTx(
       await cEth.write.mint([], {
         account: supplier.account,
         value: parseEther("20"),
       })
     );
-
-    // Code comment
     await waitTx(
       await token.write.approve([cErc20.address, parseEther("2000")], {
         account: borrower.account,
@@ -332,15 +304,11 @@ describe("More lending flows", async () => {
         account: borrower.account,
       })
     );
-
-    // Code comment
     await waitTx(
       await comptroller.write.enterMarkets([[cErc20.address]], {
         account: borrower.account,
       })
     );
-
-    // Code comment
     await waitTx(
       await cEth.write.borrow([parseEther("0.5")], {
         account: borrower.account,
@@ -350,11 +318,7 @@ describe("More lending flows", async () => {
     const beforeLiq = await comptroller.read.getAccountLiquidity([
       borrower.account.address,
     ]);
-
-    // Code comment
     assert.equal(beforeLiq[2], 0n);
-
-    // Code comment
     await waitTx(
       await oracle.write.setUnderlyingPrice(
         [cErc20.address, parseEther("0.4")],
@@ -365,15 +329,11 @@ describe("More lending flows", async () => {
     const afterDrop = await comptroller.read.getAccountLiquidity([
       borrower.account.address,
     ]);
-
-    // Code comment
     assert.ok(afterDrop[2] > 0n, "borrower should have shortfall");
 
     const liquidatorCTokenBefore = await cErc20.read.balanceOf([
       liquidator.account.address,
     ]);
-
-    // Code comment
     await waitTx(
       await cEth.write.liquidateBorrow(
         [borrower.account.address, cErc20.address],

@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "hardhat test",
-    "test:report": "hardhat test > test-results/hardhat-test-results.txt 2>&1"
+    "test:report": "hardhat test > test-results/hardhat-test-results.txt 2>&1",
+    "deploy:mock": "hardhat run scripts/deploy.ts --network sepolia",
+    "deploy:chainlink": "hardhat run scripts/deploy-chainlink.ts --network sepolia"
   },
   "keywords": [],
   "author": "",

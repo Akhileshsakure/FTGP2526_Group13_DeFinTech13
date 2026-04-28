@@ -20,23 +20,13 @@ interface ICTokenLike {
 }
 
 interface IPriceOracle {
-    /**
-     * Code comment
-     */
-    function getUnderlyingPrice(address cToken) external view returns (uint256);
+function getUnderlyingPrice(address cToken) external view returns (uint256);
 }
 
 /**
  * @title Comptroller (Risk Manager)
  * @notice Aave-style multi-market liquidity and risk controller
  *
- * Code comment
- * Code comment
- * Code comment
- * Code comment
- * Code comment
- * Code comment
- * Code comment
  */
 contract Comptroller {
     /*//////////////////////////////////////////////////////////////
@@ -104,8 +94,6 @@ contract Comptroller {
 
     // All listed markets
     address[] public allMarkets;
-
-    // Code comment
     IPriceOracle public oracle;
 
     // Close factor: max percentage of borrow that can be repaid in one liquidation
