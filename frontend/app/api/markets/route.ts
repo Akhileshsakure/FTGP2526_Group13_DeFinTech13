@@ -15,6 +15,7 @@ import {
 
 const WAD = 1_000_000_000_000_000_000n;
 const SECONDS_PER_YEAR = 31_536_000;
+const CACHE_SECONDS = 15;
 
 function getProvider() {
   const rpc = process.env.NEXT_PUBLIC_RPC_URL;
@@ -132,7 +133,7 @@ export async function GET() {
       { success: true, data: results, timestamp: Date.now() },
       {
         headers: {
-          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+          "Cache-Control": `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=${CACHE_SECONDS}`,
         },
       }
     );

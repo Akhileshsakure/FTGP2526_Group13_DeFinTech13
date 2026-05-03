@@ -75,6 +75,18 @@ function wadToNumber(value: bigint): number {
   return Number(ethers.formatUnits(value, 18));
 }
 
+function percentToWad(percent: string): bigint {
+  return parseUnits((parseFloat(percent || "0") / 100).toString(), 18);
+}
+
+function amountToTokenUnits(amount: string, market: MarketConfig): bigint {
+  return parseUnits(amount || "0", market.decimals);
+}
+
+function maybeMaxUint(amount: string, market: MarketConfig): bigint {
+  return amount.trim().toLowerCase() === "max" ? ethers.MaxUint256 : amountToTokenUnits(amount, market);
+}
+
 function formatOraclePrice(price: bigint, decimals: number): number {
   if (price === 0n) return 0;
   if (decimals < 18 && price >= 10n ** 24n) {
@@ -121,6 +133,89 @@ export interface AccountSummary {
   healthFactor: number;
   availableToBorrowUSD: number;
   positions: UserPosition[];
+}
+
+export interface RiskPreview {
+  errorCode: number;
+  liquidityUSD: number;
+  shortfallUSD: number;
+  allowed: boolean;
+}
+
+export interface AdminMarketState {
+  market: MarketConfig;
+  isListed: boolean;
+  ltv: number;
+  liquidationThreshold: number;
+  liquidationBonus: number;
+  supplyCap: bigint;
+  borrowCap: bigint;
+  isPaused: boolean;
+  reserveFactor: number;
+  interestRateStrategy: string;
+}
+
+export interface InterestRateParams {
+  owner: string;
+  baseRatePerYear: number;
+  multiplierPerYear: number;
+  jumpMultiplierPerYear: number;
+  kink: number;
+}
+
+export interface AdminProtocolState {
+  admin: string;
+  pendingAdmin: string;
+  oracle: string;
+  closeFactor: number;
+  markets: AdminMarketState[];
+}
+
+export interface CachedData<T> {
+  data: T;
+  updatedAt: number;
+}
+
+type MarketApiItem = Omit<MarketData, "market" | "supplyCap" | "borrowCap" | "exchangeRate"> & {
+  id: string;
+  name: string;
+  symbol: string;
+  icon: string;
+  isNative: boolean;
+  decimals: number;
+  cTokenAddress: string;
+  underlyingAddress: string | null;
+  supplyCap: string;
+  borrowCap: string;
+  exchangeRate: string;
+};
+
+function mapMarketApiItem(item: MarketApiItem): MarketData {
+  return {
+    market: {
+      id: item.id,
+      name: item.name,
+      symbol: item.symbol,
+      cTokenAddress: item.cTokenAddress,
+      underlyingAddress: item.underlyingAddress,
+      isNative: item.isNative,
+      decimals: item.decimals,
+      icon: item.icon,
+      collateralFactor: item.collateralFactor,
+    },
+    supplyAPY: item.supplyAPY,
+    totalSupply: item.totalSupply,
+    borrowAPY: item.borrowAPY,
+    totalBorrows: item.totalBorrows,
+    utilizationRate: item.utilizationRate,
+    priceUSD: item.priceUSD,
+    collateralFactor: item.collateralFactor,
+    liquidationThreshold: item.liquidationThreshold,
+    liquidationBonus: item.liquidationBonus,
+    supplyCap: BigInt(item.supplyCap),
+    borrowCap: BigInt(item.borrowCap),
+    exchangeRate: BigInt(item.exchangeRate),
+  };
 }
 
 export async function fetchMarketData(market: MarketConfig): Promise<MarketData> {
@@ -208,6 +303,10 @@ export async function fetchMarketData(market: MarketConfig): Promise<MarketData>
 }
 
 export async function fetchAllMarkets(): Promise<MarketData[]> {
+  if (typeof window !== "undefined") {
+    return (await fetchCachedAllMarkets()).data;
+  }
+
   const configuredMarkets = MARKETS.filter((market) => Boolean(market.cTokenAddress));
   const results = await Promise.allSettled(configuredMarkets.map(fetchMarketData));
   const markets = results.flatMap((result) =>
@@ -224,7 +323,36 @@ export async function fetchAllMarkets(): Promise<MarketData[]> {
   return markets;
 }
 
+export async function fetchCachedAllMarkets(): Promise<CachedData<MarketData[]>> {
+  if (typeof window === "undefined") {
+    return { data: await fetchAllMarkets(), updatedAt: Date.now() };
+  }
+
+  const response = await fetch("/api/markets");
+  if (!response.ok) {
+    throw new Error(`Market API returned ${response.status}`);
+  }
+  const payload = (await response.json()) as {
+    success?: boolean;
+    data?: MarketApiItem[];
+    timestamp?: number;
+    error?: string;
+  };
+  if (!payload.success || !payload.data) {
+    throw new Error(payload.error || "Could not load market data");
+  }
+
+  return {
+    data: payload.data.map(mapMarketApiItem),
+    updatedAt: payload.timestamp ?? Date.now(),
+  };
+}
+
 export async function fetchMarketPriceHistory(marketData: MarketData): Promise<PricePoint[]> {
+  if (typeof window !== "undefined") {
+    return (await fetchCachedMarketPriceHistory(marketData)).data;
+  }
+
   assertAddress(ADDRESSES.oracle, "Oracle address");
   const provider = getReadProvider();
   const oracle = new Contract(ADDRESSES.oracle, ORACLE_ABI, provider);
@@ -248,6 +376,29 @@ export async function fetchMarketPriceHistory(marketData: MarketData): Promise<P
   } catch {
     return buildFallbackPriceHistory(marketData.priceUSD, marketData.market.id);
   }
+}
+
+export async function fetchCachedMarketPriceHistory(
+  marketData: MarketData
+): Promise<CachedData<PricePoint[]>> {
+  if (typeof window === "undefined") {
+    return { data: await fetchMarketPriceHistory(marketData), updatedAt: Date.now() };
+  }
+
+  const response = await fetch(`/api/price-history?market=${encodeURIComponent(marketData.market.id)}`);
+  if (!response.ok) {
+    throw new Error(`Price history API returned ${response.status}`);
+  }
+  const payload = (await response.json()) as {
+    success?: boolean;
+    data?: PricePoint[];
+    timestamp?: number;
+    error?: string;
+  };
+  if (!payload.success || !payload.data) {
+    throw new Error(payload.error || "Could not load price history");
+  }
+  return { data: payload.data, updatedAt: payload.timestamp ?? Date.now() };
 }
 
 function buildFallbackPriceHistory(currentPrice: number, seed: string): PricePoint[] {
@@ -336,6 +487,147 @@ export async function fetchUserPositions(
     availableToBorrowUSD: liquidityUSD,
     positions,
   };
+}
+
+export async function fetchUserPositionForMarket(
+  userAddress: string,
+  marketData: MarketData
+): Promise<AccountSummary> {
+  assertAddress(ADDRESSES.comptroller, "Comptroller address");
+  const provider = getReadProvider();
+  const comptroller = new Contract(ADDRESSES.comptroller, COMPTROLLER_ABI, provider);
+  const cToken = new Contract(marketData.market.cTokenAddress, getCTokenABI(marketData.market), provider);
+
+  const [
+    cTokenBalanceRaw,
+    borrowBalanceRaw,
+    isCollateral,
+    [, liquidity, shortfall],
+    [healthErr, healthFactorRaw],
+  ] = await Promise.all([
+    readWithRetry(() => fn(cToken, "balanceOf(address)")(userAddress)),
+    readWithRetry(() => fn(cToken, "borrowBalanceStored(address)")(userAddress)),
+    readWithRetry(() => fn(comptroller, "checkMembership(address,address)")(
+      userAddress,
+      marketData.market.cTokenAddress
+    )),
+    readWithRetry(() => fn(comptroller, "getAccountLiquidity(address)")(userAddress)),
+    readWithRetry(() => fn(comptroller, "getAccountHealthFactor(address)")(userAddress)),
+  ]);
+
+  const cTokenBalance = BigInt(cTokenBalanceRaw);
+  const borrowBalance = BigInt(borrowBalanceRaw);
+  const supplyUnderlying = (cTokenBalance * marketData.exchangeRate) / WAD;
+  const supplyStr = formatUnits(supplyUnderlying, marketData.market.decimals);
+  const borrowStr = formatUnits(borrowBalance, marketData.market.decimals);
+  const liquidityUSD = wadToNumber(BigInt(liquidity));
+  const shortfallUSD = wadToNumber(BigInt(shortfall));
+  const healthFactor =
+    BigInt(healthErr) !== 0n
+      ? Infinity
+      : Math.min(wadToNumber(BigInt(healthFactorRaw)), MAX_HEALTH_FACTOR_DISPLAY);
+
+  const position = {
+    market: marketData.market,
+    cTokenBalance,
+    supplyBalanceUnderlying: supplyStr,
+    supplyBalanceUSD: parseFloat(supplyStr) * marketData.priceUSD,
+    borrowBalance: borrowStr,
+    borrowBalanceUSD: parseFloat(borrowStr) * marketData.priceUSD,
+    isCollateral: Boolean(isCollateral),
+  } satisfies UserPosition;
+
+  return {
+    totalSuppliedUSD: position.supplyBalanceUSD,
+    totalBorrowedUSD: position.borrowBalanceUSD,
+    netAPY:
+      position.supplyBalanceUSD === 0
+        ? 0
+        : (position.supplyBalanceUSD * (marketData.supplyAPY / 100) -
+            position.borrowBalanceUSD * (marketData.borrowAPY / 100)) /
+          position.supplyBalanceUSD *
+          100,
+    healthFactor: shortfallUSD > 0 ? 0 : healthFactor,
+    availableToBorrowUSD: liquidityUSD,
+    positions: [position],
+  };
+}
+
+export async function fetchBorrowRiskPreview(
+  userAddress: string,
+  market: MarketConfig,
+  amountHuman: string
+): Promise<RiskPreview> {
+  assertAddress(ADDRESSES.comptroller, "Comptroller address");
+  assertAddress(market.cTokenAddress, `${market.symbol} market address`);
+  const amount = parseUnits(amountHuman || "0", market.decimals);
+  const comptroller = readContract(ADDRESSES.comptroller, COMPTROLLER_ABI);
+  const [errorCodeRaw, liquidityRaw, shortfallRaw] = await readWithRetry(() =>
+    fn(comptroller, "getHypotheticalAccountLiquidity(address,address,uint256,uint256)")(
+      userAddress,
+      market.cTokenAddress,
+      0,
+      amount
+    )
+  );
+  const errorCode = Number(errorCodeRaw);
+  const shortfallUSD = wadToNumber(BigInt(shortfallRaw));
+  return {
+    errorCode,
+    liquidityUSD: wadToNumber(BigInt(liquidityRaw)),
+    shortfallUSD,
+    allowed: errorCode === 0 && shortfallUSD === 0,
+  };
+}
+
+export async function fetchRedeemRiskPreview(
+  userAddress: string,
+  market: MarketConfig,
+  amountHuman: string,
+  exchangeRate: bigint
+): Promise<RiskPreview> {
+  assertAddress(ADDRESSES.comptroller, "Comptroller address");
+  assertAddress(market.cTokenAddress, `${market.symbol} market address`);
+  const redeemUnderlying = parseUnits(amountHuman || "0", market.decimals);
+  const redeemTokens = exchangeRate === 0n ? 0n : (redeemUnderlying * WAD) / exchangeRate;
+  const comptroller = readContract(ADDRESSES.comptroller, COMPTROLLER_ABI);
+  const [errorCodeRaw, liquidityRaw, shortfallRaw] = await readWithRetry(() =>
+    fn(comptroller, "getHypotheticalAccountLiquidity(address,address,uint256,uint256)")(
+      userAddress,
+      market.cTokenAddress,
+      redeemTokens,
+      0
+    )
+  );
+  const errorCode = Number(errorCodeRaw);
+  const shortfallUSD = wadToNumber(BigInt(shortfallRaw));
+  return {
+    errorCode,
+    liquidityUSD: wadToNumber(BigInt(liquidityRaw)),
+    shortfallUSD,
+    allowed: errorCode === 0 && shortfallUSD === 0,
+  };
+}
+
+export function calculateProjectedHealthFactor(
+  summary: AccountSummary | null,
+  marketsData: MarketData[],
+  borrowMarket: MarketData | undefined,
+  amountHuman: string
+): number {
+  if (!summary) return Infinity;
+  const thresholdCollateralUSD = summary.positions.reduce((sum, position) => {
+    if (!position.isCollateral) return sum;
+    const marketData = marketsData.find((md) => md.market.id === position.market.id);
+    return sum + position.supplyBalanceUSD * ((marketData?.liquidationThreshold ?? 0) / 100);
+  }, 0);
+  const extraBorrowUSD =
+    borrowMarket && amountHuman && parseFloat(amountHuman) > 0
+      ? parseFloat(amountHuman) * borrowMarket.priceUSD
+      : 0;
+  const projectedBorrowUSD = summary.totalBorrowedUSD + extraBorrowUSD;
+  if (projectedBorrowUSD === 0) return Infinity;
+  return thresholdCollateralUSD / projectedBorrowUSD;
 }
 
 export async function fetchWalletBalance(
@@ -471,6 +763,184 @@ export async function exitMarket(
   return tx.wait();
 }
 
+export async function fetchAdminProtocolState(): Promise<AdminProtocolState> {
+  assertAddress(ADDRESSES.comptroller, "Comptroller address");
+  const comptroller = readContract(ADDRESSES.comptroller, COMPTROLLER_ABI);
+  const configuredMarkets = MARKETS.filter((market) => Boolean(market.cTokenAddress));
+
+  const [admin, pendingAdmin, oracle, closeFactor, markets] = await Promise.all([
+    readWithRetry(() => fn(comptroller, "admin()")()),
+    readWithRetry(() => fn(comptroller, "pendingAdmin()")()),
+    readWithRetry(() => fn(comptroller, "oracle()")()),
+    readWithRetry(() => fn(comptroller, "closeFactorMantissa()")()),
+    Promise.all(
+      configuredMarkets.map(async (market) => {
+        const cToken = readContract(market.cTokenAddress, getCTokenABI(market));
+        const [marketInfo, isPaused, reserveFactor, strategy] = await Promise.all([
+          readWithRetry(() => fn(comptroller, "markets(address)")(market.cTokenAddress)),
+          readWithRetry(() => fn(comptroller, "isMarketPaused(address)")(market.cTokenAddress)),
+          readWithRetry(() => fn(cToken, "reserveFactorMantissa()")()),
+          readWithRetry(() => fn(cToken, "interestRateStrategy()")()),
+        ]);
+
+        return {
+          market,
+          isListed: Boolean(marketInfo[0]),
+          ltv: wadToNumber(BigInt(marketInfo[1])) * 100,
+          liquidationThreshold: wadToNumber(BigInt(marketInfo[2])) * 100,
+          liquidationBonus: wadToNumber(BigInt(marketInfo[3])) * 100,
+          supplyCap: BigInt(marketInfo[4]),
+          borrowCap: BigInt(marketInfo[5]),
+          isPaused: Boolean(isPaused),
+          reserveFactor: wadToNumber(BigInt(reserveFactor)) * 100,
+          interestRateStrategy: String(strategy),
+        } satisfies AdminMarketState;
+      })
+    ),
+  ]);
+
+  return {
+    admin: String(admin),
+    pendingAdmin: String(pendingAdmin),
+    oracle: String(oracle),
+    closeFactor: wadToNumber(BigInt(closeFactor)) * 100,
+    markets,
+  };
+}
+
+export async function fetchInterestRateParams(strategyAddress: string): Promise<InterestRateParams> {
+  const strategy = readContract(strategyAddress, INTEREST_STRATEGY_ABI);
+  const [owner, baseRate, multiplier, jumpMultiplier, kink] = await Promise.all([
+    readWithRetry(() => fn(strategy, "owner()")()),
+    readWithRetry(() => fn(strategy, "baseRatePerYear()")()),
+    readWithRetry(() => fn(strategy, "multiplierPerYear()")()),
+    readWithRetry(() => fn(strategy, "jumpMultiplierPerYear()")()),
+    readWithRetry(() => fn(strategy, "kink()")()),
+  ]);
+
+  return {
+    owner: String(owner),
+    baseRatePerYear: wadToNumber(BigInt(baseRate)) * 100,
+    multiplierPerYear: wadToNumber(BigInt(multiplier)) * 100,
+    jumpMultiplierPerYear: wadToNumber(BigInt(jumpMultiplier)) * 100,
+    kink: wadToNumber(BigInt(kink)) * 100,
+  };
+}
+
+export async function adminSetMarketRiskParameters(
+  market: MarketConfig,
+  ltvPercent: string,
+  liquidationThresholdPercent: string,
+  liquidationBonusPercent: string
+): Promise<ethers.ContractTransactionReceipt | null> {
+  const comptroller = await writeContract(ADDRESSES.comptroller, COMPTROLLER_ABI);
+  const tx = await fn(comptroller, "_setMarketRiskParameters(address,uint256,uint256,uint256)")(
+    market.cTokenAddress,
+    percentToWad(ltvPercent),
+    percentToWad(liquidationThresholdPercent),
+    percentToWad(liquidationBonusPercent)
+  );
+  return tx.wait();
+}
+
+export async function adminSetMarketCaps(
+  market: MarketConfig,
+  supplyCapAmount: string,
+  borrowCapAmount: string
+): Promise<ethers.ContractTransactionReceipt | null> {
+  const comptroller = await writeContract(ADDRESSES.comptroller, COMPTROLLER_ABI);
+  const tx = await fn(comptroller, "_setMarketCaps(address,uint256,uint256)")(
+    market.cTokenAddress,
+    maybeMaxUint(supplyCapAmount, market),
+    maybeMaxUint(borrowCapAmount, market)
+  );
+  return tx.wait();
+}
+
+export async function adminSetMarketPause(
+  market: MarketConfig,
+  state: boolean
+): Promise<ethers.ContractTransactionReceipt | null> {
+  const comptroller = await writeContract(ADDRESSES.comptroller, COMPTROLLER_ABI);
+  const tx = await fn(comptroller, "_setMarketPause(address,bool)")(market.cTokenAddress, state);
+  return tx.wait();
+}
+
+export async function adminSetCloseFactor(
+  closeFactorPercent: string
+): Promise<ethers.ContractTransactionReceipt | null> {
+  const comptroller = await writeContract(ADDRESSES.comptroller, COMPTROLLER_ABI);
+  const tx = await fn(comptroller, "_setCloseFactor(uint256)")(percentToWad(closeFactorPercent));
+  return tx.wait();
+}
+
+export async function adminSetPriceOracle(
+  oracleAddress: string
+): Promise<ethers.ContractTransactionReceipt | null> {
+  assertAddress(oracleAddress, "Oracle address");
+  const comptroller = await writeContract(ADDRESSES.comptroller, COMPTROLLER_ABI);
+  const tx = await fn(comptroller, "_setPriceOracle(address)")(oracleAddress);
+  return tx.wait();
+}
+
+export async function adminSetComptrollerRouter(
+  routerAddress: string,
+  approved: boolean
+): Promise<ethers.ContractTransactionReceipt | null> {
+  assertAddress(routerAddress, "Router address");
+  const comptroller = await writeContract(ADDRESSES.comptroller, COMPTROLLER_ABI);
+  const tx = await fn(comptroller, "setRouter(address,bool)")(routerAddress, approved);
+  return tx.wait();
+}
+
+export async function adminSetReserveFactor(
+  market: MarketConfig,
+  reserveFactorPercent: string
+): Promise<ethers.ContractTransactionReceipt | null> {
+  const cToken = await writeContract(market.cTokenAddress, getCTokenABI(market));
+  const tx = await fn(cToken, "_setReserveFactor(uint256)")(percentToWad(reserveFactorPercent));
+  return tx.wait();
+}
+
+export async function adminSetInterestRateStrategy(
+  market: MarketConfig,
+  strategyAddress: string
+): Promise<ethers.ContractTransactionReceipt | null> {
+  assertAddress(strategyAddress, "Interest rate strategy address");
+  const cToken = await writeContract(market.cTokenAddress, getCTokenABI(market));
+  const tx = await fn(cToken, "_setInterestRateStrategy(address)")(strategyAddress);
+  return tx.wait();
+}
+
+export async function adminSetCTokenRouter(
+  market: MarketConfig,
+  routerAddress: string,
+  approved: boolean
+): Promise<ethers.ContractTransactionReceipt | null> {
+  assertAddress(routerAddress, "Router address");
+  const cToken = await writeContract(market.cTokenAddress, getCTokenABI(market));
+  const tx = await fn(cToken, "setRouter(address,bool)")(routerAddress, approved);
+  return tx.wait();
+}
+
+export async function adminSetInterestRateParams(
+  strategyAddress: string,
+  baseRatePercent: string,
+  multiplierPercent: string,
+  jumpMultiplierPercent: string,
+  kinkPercent: string
+): Promise<ethers.ContractTransactionReceipt | null> {
+  assertAddress(strategyAddress, "Interest rate strategy address");
+  const strategy = await writeContract(strategyAddress, INTEREST_STRATEGY_ABI);
+  const tx = await fn(strategy, "setInterestParams(uint256,uint256,uint256,uint256)")(
+    percentToWad(baseRatePercent),
+    percentToWad(multiplierPercent),
+    percentToWad(jumpMultiplierPercent),
+    percentToWad(kinkPercent)
+  );
+  return tx.wait();
+}
+
 export function formatUSD(value: number): string {
   if (!isFinite(value)) return "-";
   return new Intl.NumberFormat("en-US", {
@@ -562,6 +1032,6 @@ export function getTransactionErrorMessage(error: unknown): string {
 }
 
 export function formatHealthFactor(hf: number): string {
-  if (!isFinite(hf)) return "∞";
+  if (!isFinite(hf) || hf >= MAX_HEALTH_FACTOR_DISPLAY) return "No debt";
   return hf.toFixed(2);
 }

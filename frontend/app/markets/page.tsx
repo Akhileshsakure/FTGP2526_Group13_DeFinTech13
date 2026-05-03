@@ -5,8 +5,8 @@ import { useWallet } from "../../context/WalletContext";
 import MarketCard from "../../components/MarketCard";
 import MarketPriceChart, { type PurchaseMarker } from "../../components/MarketPriceChart";
 import {
-  fetchAllMarkets,
-  fetchMarketPriceHistory,
+  fetchCachedAllMarkets,
+  fetchCachedMarketPriceHistory,
   fetchUserPositions,
   getTransactionErrorMessage,
   type MarketData,
@@ -25,6 +25,8 @@ export default function MarketsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [positionError, setPositionError] = useState<string | null>(null);
+  const [marketUpdatedAt, setMarketUpdatedAt] = useState<number | null>(null);
+  const [priceUpdatedAt, setPriceUpdatedAt] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -32,16 +34,19 @@ export default function MarketsPage() {
       setError(null);
       setPositionError(null);
       try {
-        const md = await fetchAllMarkets();
+        const cachedMarkets = await fetchCachedAllMarkets();
+        const md = cachedMarkets.data;
         setMarkets(md);
+        setMarketUpdatedAt(cachedMarkets.updatedAt);
         const histories = await Promise.all(
           md.map(async (marketData) => [
             marketData.market.id,
-            await fetchMarketPriceHistory(marketData),
+            await fetchCachedMarketPriceHistory(marketData),
           ] as const)
         );
-        const historyMap = Object.fromEntries(histories);
+        const historyMap = Object.fromEntries(histories.map(([id, result]) => [id, result.data]));
         setPriceHistoryByMarket(historyMap);
+        setPriceUpdatedAt(histories[0]?.[1].updatedAt ?? null);
 
         if (account && isCorrectNetwork) {
           try {
@@ -84,6 +89,12 @@ export default function MarketsPage() {
     <div className="fade-up">
       <div className="mb-8">
         <h1 className="font-display text-3xl text-stone-800 mb-1">Markets</h1>
+        {(marketUpdatedAt || priceUpdatedAt) && (
+          <p className="text-xs text-stone-400 mb-1">
+            Market data updated {marketUpdatedAt ? formatUpdatedAt(marketUpdatedAt) : "-"}; price history updated{" "}
+            {priceUpdatedAt ? formatUpdatedAt(priceUpdatedAt) : "-"}; cached for 15 seconds.
+          </p>
+        )}
         <p className="text-stone-500 text-sm">
           All available lending markets — supply to earn interest or borrow against collateral
         </p>
@@ -290,6 +301,14 @@ function buildPurchaseMarkers(
   }
 
   return result;
+}
+
+function formatUpdatedAt(timestamp: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(timestamp));
 }
 
 function findPriceAt(history: PricePoint[], timestamp: number): PricePoint | null {

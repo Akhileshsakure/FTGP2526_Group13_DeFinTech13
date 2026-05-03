@@ -45,6 +45,11 @@ export interface UserTransaction {
   status: number | null;
 }
 
+export interface CachedTransactions {
+  data: UserTransaction[];
+  updatedAt: number;
+}
+
 function historyBlockWindow(): number {
   const configured = Number(process.env.NEXT_PUBLIC_TX_HISTORY_BLOCKS);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_HISTORY_BLOCKS;
@@ -211,7 +216,7 @@ async function enrichTransaction(
   };
 }
 
-export async function fetchUserTransactions(userAddress: string): Promise<UserTransaction[]> {
+export async function fetchUserTransactionsFromChain(userAddress: string): Promise<UserTransaction[]> {
   const provider = getReadProvider();
   const latestBlock = await provider.getBlockNumber();
   const fromBlock = Math.max(0, latestBlock - historyBlockWindow());
@@ -232,6 +237,31 @@ export async function fetchUserTransactions(userAddress: string): Promise<UserTr
   );
 
   return Promise.all(parsed.map((tx) => enrichTransaction(tx, blockTimes.get(tx.blockNumber) ?? null)));
+}
+
+export async function fetchUserTransactions(userAddress: string): Promise<UserTransaction[]> {
+  return (await fetchCachedUserTransactions(userAddress)).data;
+}
+
+export async function fetchCachedUserTransactions(userAddress: string): Promise<CachedTransactions> {
+  if (typeof window === "undefined") {
+    return { data: await fetchUserTransactionsFromChain(userAddress), updatedAt: Date.now() };
+  }
+
+  const response = await fetch(`/api/transactions?user=${encodeURIComponent(userAddress)}`);
+  if (!response.ok) {
+    throw new Error(`Transaction API returned ${response.status}`);
+  }
+  const payload = (await response.json()) as {
+    success?: boolean;
+    data?: UserTransaction[];
+    timestamp?: number;
+    error?: string;
+  };
+  if (!payload.success || !payload.data) {
+    throw new Error(payload.error || "Could not load transactions");
+  }
+  return { data: payload.data, updatedAt: payload.timestamp ?? Date.now() };
 }
 
 export function formatTransactionDate(timestamp: number | null): string {

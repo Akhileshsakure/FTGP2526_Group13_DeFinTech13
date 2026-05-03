@@ -5,7 +5,7 @@ import Link from "next/link";
 import TransactionHistoryPanel from "../../components/TransactionHistoryPanel";
 import { useWallet } from "../../context/WalletContext";
 import {
-  fetchAllMarkets,
+  fetchCachedAllMarkets,
   fetchUserPositions,
   formatUSD,
   formatAPY,
@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [positionError, setPositionError] = useState<string | null>(null);
+  const [marketUpdatedAt, setMarketUpdatedAt] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -30,8 +31,10 @@ export default function Dashboard() {
       setError(null);
       setPositionError(null);
       try {
-        const md = await fetchAllMarkets();
+        const cachedMarkets = await fetchCachedAllMarkets();
+        const md = cachedMarkets.data;
         setMarkets(md);
+        setMarketUpdatedAt(cachedMarkets.updatedAt);
         if (account && isCorrectNetwork) {
           try {
             const s = await fetchUserPositions(account, md);
@@ -69,6 +72,11 @@ export default function Dashboard() {
         <p className="text-stone-500 text-sm">
           Your lending & borrowing positions on the DeFi protocol
         </p>
+        {marketUpdatedAt && (
+          <p className="text-xs text-stone-400 mt-1">
+            Market data updated {formatUpdatedAt(marketUpdatedAt)}; public metrics are cached for 15 seconds.
+          </p>
+        )}
       </div>
 
       {/* Wallet gate */}
@@ -242,6 +250,14 @@ export default function Dashboard() {
       )}
     </div>
   );
+}
+
+function formatUpdatedAt(timestamp: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(timestamp));
 }
 
 function SummaryCard({

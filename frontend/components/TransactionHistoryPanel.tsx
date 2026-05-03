@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useWallet } from "../context/WalletContext";
 import {
   etherscanTxUrl,
-  fetchUserTransactions,
+  fetchCachedUserTransactions,
   formatHash,
   formatTransactionDate,
   type UserTransaction,
@@ -41,6 +41,7 @@ export default function TransactionHistoryPanel({ compact = false }: { compact?:
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -52,7 +53,9 @@ export default function TransactionHistoryPanel({ compact = false }: { compact?:
       setLoading(true);
       setError(null);
       try {
-        setTransactions(await fetchUserTransactions(account));
+        const result = await fetchCachedUserTransactions(account);
+        setTransactions(result.data);
+        setUpdatedAt(result.updatedAt);
       } catch (err: unknown) {
         setError(getTransactionLoadError(err));
       } finally {
@@ -87,7 +90,10 @@ export default function TransactionHistoryPanel({ compact = false }: { compact?:
     <div className="card overflow-hidden">
       <div className="px-5 py-3 border-b border-stone-100 flex items-center justify-between gap-3">
         <span className="font-medium text-sm text-stone-700">Transactions</span>
-        <span className="text-xs text-stone-400">{transactions.length} found</span>
+        <span className="text-xs text-stone-400">
+          {transactions.length} found
+          {updatedAt ? ` updated ${formatUpdatedAt(updatedAt)}` : ""}
+        </span>
       </div>
 
       {error && (
@@ -152,6 +158,14 @@ export default function TransactionHistoryPanel({ compact = false }: { compact?:
       )}
     </div>
   );
+}
+
+function formatUpdatedAt(timestamp: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(timestamp));
 }
 
 function TransactionDetails({ tx }: { tx: UserTransaction }) {

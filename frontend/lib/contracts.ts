@@ -106,16 +106,29 @@ export const MARKETS: MarketConfig[] = [
 ];
 
 export const COMPTROLLER_ABI = [
+  "function admin() view returns (address)",
+  "function pendingAdmin() view returns (address)",
   "function getAccountLiquidity(address) view returns (uint256,uint256,uint256)",
   "function getAccountHealthFactor(address) view returns (uint256,uint256)",
   "function getHypotheticalAccountLiquidity(address,address,uint256,uint256) view returns (uint256,uint256,uint256)",
   "function markets(address) view returns (bool,uint256,uint256,uint256,uint256,uint256)",
+  "function isMarketPaused(address) view returns (bool)",
+  "function closeFactorMantissa() view returns (uint256)",
+  "function approvedRouters(address) view returns (bool)",
   "function accountMembership(address,address) view returns (bool)",
   "function checkMembership(address,address) view returns (bool)",
   "function getAssetsIn(address) view returns (address[])",
   "function getAllMarkets() view returns (address[])",
-  "function closeFactorMantissa() view returns (uint256)",
   "function oracle() view returns (address)",
+  "function _setPendingAdmin(address) returns (uint256)",
+  "function _acceptAdmin() returns (uint256)",
+  "function _setPriceOracle(address) returns (uint256)",
+  "function _supportMarket(address,uint256,uint256,uint256) returns (uint256)",
+  "function _setMarketRiskParameters(address,uint256,uint256,uint256) returns (uint256)",
+  "function _setMarketCaps(address,uint256,uint256) returns (uint256)",
+  "function _setMarketPause(address,bool) returns (uint256)",
+  "function _setCloseFactor(uint256) returns (uint256)",
+  "function setRouter(address,bool) returns (uint256)",
   "function enterMarkets(address[]) returns (uint256[])",
   "function exitMarket(address) returns (uint256)",
 ] as const;
@@ -137,6 +150,9 @@ export const CTOKEN_BASE_ABI = [
   "function totalReserves() view returns (uint256)",
   "function reserveFactorMantissa() view returns (uint256)",
   "function interestRateStrategy() view returns (address)",
+  "function admin() view returns (address)",
+  "function pendingAdmin() view returns (address)",
+  "function approvedRouters(address) view returns (bool)",
   "function borrowIndex() view returns (uint256)",
   "function accrualTimestamp() view returns (uint256)",
   "function getCashPrior() view returns (uint256)",
@@ -147,6 +163,12 @@ export const CTOKEN_BASE_ABI = [
   "function borrow(uint256) returns (uint256)",
   "function repayBorrow(uint256) returns (uint256)",
   "function repayBorrowBehalf(address,uint256) returns (uint256)",
+  "function _setPendingAdmin(address) returns (uint256)",
+  "function _acceptAdmin() returns (uint256)",
+  "function _setComptroller(address) returns (uint256)",
+  "function _setReserveFactor(uint256) returns (uint256)",
+  "function _setInterestRateStrategy(address) returns (uint256)",
+  "function setRouter(address,bool) returns (uint256)",
 ] as const;
 
 export const CETH_ABI = [
@@ -182,6 +204,13 @@ export const ORACLE_ABI = [
 ] as const;
 
 export const INTEREST_STRATEGY_ABI = [
+  "function owner() view returns (address)",
+  "function baseRatePerYear() view returns (uint256)",
+  "function multiplierPerYear() view returns (uint256)",
+  "function jumpMultiplierPerYear() view returns (uint256)",
+  "function kink() view returns (uint256)",
+  "function transferOwnership(address)",
+  "function setInterestParams(uint256,uint256,uint256,uint256)",
   "function getBorrowRate(uint256,uint256,uint256) view returns (uint256)",
 ] as const;
 

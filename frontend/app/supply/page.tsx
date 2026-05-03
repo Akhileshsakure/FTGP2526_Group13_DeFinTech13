@@ -8,9 +8,10 @@ import { useWallet } from "../../context/WalletContext";
 import TxButton from "../../components/TxButton";
 import Toast, { useToast } from "../../components/Toast";
 import {
-  fetchAllMarkets,
-  fetchUserPositions,
+  fetchMarketData,
+  fetchUserPositionForMarket,
   fetchWalletBalance,
+  fetchRedeemRiskPreview,
   supplyAsset,
   redeemAsset,
   enterMarket,
@@ -21,6 +22,7 @@ import {
   getTransactionErrorMessage,
   type MarketData,
   type AccountSummary,
+  type RiskPreview,
 } from "../../lib/protocol";
 import { MARKETS } from "../../lib/contracts";
 
@@ -39,6 +41,8 @@ function SupplyInner() {
   const [walletBalance, setWalletBalance] = useState<string>("0");
   const [loading, setLoading] = useState(true);
   const [txLoading, setTxLoading] = useState(false);
+  const [redeemRisk, setRedeemRisk] = useState<RiskPreview | null>(null);
+  const [riskLoading, setRiskLoading] = useState(false);
   const { toasts, addToast, removeToast } = useToast();
 
   const selectedMarket = MARKETS.find((m) => m.id === selectedMarketId) ?? MARKETS[0];
@@ -48,10 +52,11 @@ function SupplyInner() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const md = await fetchAllMarkets();
+      const selectedData = await fetchMarketData(selectedMarket);
+      const md = [selectedData];
       setMarkets(md);
       if (account && isCorrectNetwork) {
-        const s = await fetchUserPositions(account, md);
+        const s = await fetchUserPositionForMarket(account, selectedData);
         setSummary(s);
         const bal = await fetchWalletBalance(account, selectedMarket);
         setWalletBalance(bal);
@@ -66,6 +71,43 @@ function SupplyInner() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadRisk = async () => {
+      if (
+        !account ||
+        !isCorrectNetwork ||
+        tab !== "redeem" ||
+        !amount ||
+        parseFloat(amount) <= 0 ||
+        !selectedMarketData ||
+        !userPosition?.isCollateral
+      ) {
+        setRedeemRisk(null);
+        setRiskLoading(false);
+        return;
+      }
+      setRiskLoading(true);
+      try {
+        const preview = await fetchRedeemRiskPreview(
+          account,
+          selectedMarket,
+          amount,
+          selectedMarketData.exchangeRate
+        );
+        if (!cancelled) setRedeemRisk(preview);
+      } catch {
+        if (!cancelled) setRedeemRisk(null);
+      } finally {
+        if (!cancelled) setRiskLoading(false);
+      }
+    };
+    loadRisk();
+    return () => {
+      cancelled = true;
+    };
+  }, [account, isCorrectNetwork, tab, amount, selectedMarket, selectedMarketData, userPosition?.isCollateral]);
 
   const handleMaxSupply = () => setAmount(walletBalance);
   const handleMaxRedeem = () =>
@@ -126,6 +168,12 @@ function SupplyInner() {
 
   const supplied = parseFloat(userPosition?.supplyBalanceUnderlying ?? "0");
   const wallet = parseFloat(walletBalance);
+  const redeemBlockedByRisk =
+    tab === "redeem" &&
+    amount &&
+    parseFloat(amount) > 0 &&
+    redeemRisk !== null &&
+    !redeemRisk.allowed;
 
   return (
     <div className="fade-up max-w-xl mx-auto">
@@ -222,7 +270,22 @@ function SupplyInner() {
         {/* USD estimate */}
         {amount && selectedMarketData && (
           <div className="mt-2 text-xs text-stone-400 font-mono">
-            ≈ {formatUSD(parseFloat(amount) * selectedMarketData.priceUSD)}
+            ~= {formatUSD(parseFloat(amount) * selectedMarketData.priceUSD)}
+          </div>
+        )}
+
+        {tab === "redeem" && amount && parseFloat(amount) > 0 && userPosition?.isCollateral && (
+          <div className="mt-3 pt-3 border-t border-stone-100 flex justify-between text-xs">
+            <span className="text-stone-500">On-chain redeem check</span>
+            <span className={`font-mono font-medium ${redeemRisk?.allowed ? "text-emerald-600" : "text-rose-500"}`}>
+              {riskLoading
+                ? "Checking..."
+                : redeemRisk
+                ? redeemRisk.allowed
+                  ? `${formatUSD(redeemRisk.liquidityUSD)} liquidity left`
+                  : `${formatUSD(redeemRisk.shortfallUSD)} shortfall`
+                : "Unavailable"}
+            </span>
           </div>
         )}
       </div>
@@ -250,7 +313,7 @@ function SupplyInner() {
           pendingLabel="Redeeming…"
           onClick={handleRedeem}
           loading={txLoading}
-          disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > supplied}
+          disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > supplied || Boolean(redeemBlockedByRisk) || riskLoading}
           variant="outline"
         />
       )}

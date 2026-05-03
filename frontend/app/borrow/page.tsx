@@ -6,9 +6,10 @@ import { useWallet } from "../../context/WalletContext";
 import TxButton from "../../components/TxButton";
 import Toast, { useToast } from "../../components/Toast";
 import {
-  fetchAllMarkets,
-  fetchUserPositions,
+  fetchMarketData,
+  fetchUserPositionForMarket,
   fetchWalletBalance,
+  fetchBorrowRiskPreview,
   borrowAsset,
   repayBorrow,
   formatUSD,
@@ -18,6 +19,7 @@ import {
   getTransactionErrorMessage,
   type MarketData,
   type AccountSummary,
+  type RiskPreview,
 } from "../../lib/protocol";
 import { MARKETS } from "../../lib/contracts";
 
@@ -37,6 +39,8 @@ function BorrowInner() {
   const [walletBalance, setWalletBalance] = useState<string>("0");
   const [loading, setLoading] = useState(true);
   const [txLoading, setTxLoading] = useState(false);
+  const [borrowRisk, setBorrowRisk] = useState<RiskPreview | null>(null);
+  const [riskLoading, setRiskLoading] = useState(false);
   const { toasts, addToast, removeToast } = useToast();
 
   const selectedMarket = MARKETS.find((m) => m.id === selectedMarketId) ?? MARKETS[0];
@@ -46,10 +50,11 @@ function BorrowInner() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const md = await fetchAllMarkets();
+      const selectedData = await fetchMarketData(selectedMarket);
+      const md = [selectedData];
       setMarkets(md);
       if (account && isCorrectNetwork) {
-        const s = await fetchUserPositions(account, md);
+        const s = await fetchUserPositionForMarket(account, selectedData);
         setSummary(s);
         const bal = await fetchWalletBalance(account, selectedMarket);
         setWalletBalance(bal);
@@ -64,6 +69,30 @@ function BorrowInner() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadRisk = async () => {
+      if (!account || !isCorrectNetwork || tab !== "borrow" || !amount || parseFloat(amount) <= 0) {
+        setBorrowRisk(null);
+        setRiskLoading(false);
+        return;
+      }
+      setRiskLoading(true);
+      try {
+        const preview = await fetchBorrowRiskPreview(account, selectedMarket, amount);
+        if (!cancelled) setBorrowRisk(preview);
+      } catch {
+        if (!cancelled) setBorrowRisk(null);
+      } finally {
+        if (!cancelled) setRiskLoading(false);
+      }
+    };
+    loadRisk();
+    return () => {
+      cancelled = true;
+    };
+  }, [account, isCorrectNetwork, tab, amount, selectedMarket]);
 
   // Max borrow = available liquidity in USD / asset price (rough estimate)
   const maxBorrowUSD = summary?.availableToBorrowUSD ?? 0;
@@ -115,23 +144,19 @@ function BorrowInner() {
     }
   };
 
-  // Simulate health factor change when borrowing more
-  const simulatedBorrowUSD =
-    amount && selectedMarketData
-      ? parseFloat(amount) * selectedMarketData.priceUSD
-      : 0;
-  const simulatedTotalBorrow = (summary?.totalBorrowedUSD ?? 0) + simulatedBorrowUSD;
-  const simulatedHF =
-    simulatedTotalBorrow === 0
-      ? Infinity
-      : (summary?.totalSuppliedUSD ?? 0) * 0.75 / simulatedTotalBorrow;
+  const borrowBlockedByRisk =
+    tab === "borrow" &&
+    amount &&
+    parseFloat(amount) > 0 &&
+    borrowRisk !== null &&
+    !borrowRisk.allowed;
 
   const hfColor =
-    !isFinite(simulatedHF)
+    !summary || !isFinite(summary.healthFactor)
       ? "text-stone-400"
-      : simulatedHF >= 2
+      : summary.healthFactor >= 2
       ? "text-emerald-600"
-      : simulatedHF >= 1.2
+      : summary.healthFactor >= 1.2
       ? "text-amber-600"
       : "text-rose-500";
 
@@ -285,14 +310,26 @@ function BorrowInner() {
           </div>
         )}
 
-        {/* Health factor simulation for borrow */}
+        {/* On-chain risk preview for borrow */}
         {tab === "borrow" && amount && parseFloat(amount) > 0 && summary && (
-          <div className="mt-3 pt-3 border-t border-stone-100">
+          <div className="mt-3 pt-3 border-t border-stone-100 space-y-2">
             <div className="flex justify-between text-xs">
-              <span className="text-stone-500">Projected health factor</span>
+              <span className="text-stone-500">Current health factor</span>
               <span className={`font-mono font-medium ${hfColor}`}>
-                {formatHealthFactor(simulatedHF)}
-                {simulatedHF < 1.2 && " ⚠"}
+                {formatHealthFactor(summary.healthFactor)}
+                {summary.healthFactor < 1.2 && " warning"}
+              </span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-stone-500">On-chain LTV check</span>
+              <span className={`font-mono font-medium ${borrowRisk?.allowed ? "text-emerald-600" : "text-rose-500"}`}>
+                {riskLoading
+                  ? "Checking..."
+                  : borrowRisk
+                  ? borrowRisk.allowed
+                    ? `${formatUSD(borrowRisk.liquidityUSD)} liquidity left`
+                    : `${formatUSD(borrowRisk.shortfallUSD)} shortfall`
+                  : "Unavailable"}
               </span>
             </div>
           </div>
@@ -324,7 +361,9 @@ function BorrowInner() {
               !amount ||
               parseFloat(amount) <= 0 ||
               parseFloat(amount) > maxBorrowAmount ||
-              maxBorrowUSD === 0
+              maxBorrowUSD === 0 ||
+              Boolean(borrowBlockedByRisk) ||
+              riskLoading
             }
           />
         </>
