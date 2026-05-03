@@ -92,7 +92,7 @@ export default function TransactionHistoryPanel({ compact = false }: { compact?:
         <span className="font-medium text-sm text-stone-700">Transactions</span>
         <span className="text-xs text-stone-400">
           {transactions.length} found
-          {updatedAt ? ` updated ${formatUpdatedAt(updatedAt)}` : ""}
+          {updatedAt ? ` - updated ${formatUpdatedAt(updatedAt)}` : ""}
         </span>
       </div>
 
@@ -138,10 +138,10 @@ export default function TransactionHistoryPanel({ compact = false }: { compact?:
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm text-stone-800">
                         {tx.market.symbol}
-                        {tx.amount ? ` · ${tx.amount}` : ""}
+                        {tx.amount ? ` - ${tx.amount}` : ""}
                       </div>
                       <div className="font-mono text-xs text-stone-400 truncate">
-                        {formatHash(tx.transactionHash)} · Block {tx.blockNumber}
+                        {formatHash(tx.transactionHash)} - Block {tx.blockNumber}
                       </div>
                     </div>
                     <div className="text-xs text-stone-500 sm:text-right">

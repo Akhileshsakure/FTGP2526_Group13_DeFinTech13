@@ -1,157 +1,113 @@
-# FTGP2526_Group13_DeFinTech13
-SEMTM0029: Financial Technology Group Project - Group 13
-# 📦 DeFi Lending Protocol 
+# FTGP2526 Group 13 - DeFinTech
 
-A simplified decentralized lending protocol 
-This project demonstrates core DeFi mechanics including asset supply, borrowing, interest accrual, risk management, and price oracle integration.
+SEMTM0029 Financial Technology Group Project - Group 13
 
----
+## Overview
 
-## 🚀 Overview
+This project implements a simplified DeFi lending protocol with a Next.js frontend and Solidity smart contracts. Users can connect a Sepolia wallet, view lending markets, supply assets, enable collateral, borrow against collateral, repay debt, withdraw supplied assets, and review account activity.
 
-This protocol allows users to:
+The frontend is designed to reduce unnecessary RPC load. Public market data, price history, TVL, APY, and transaction history are served through cached API routes. User-sensitive actions still use live wallet and contract reads before transaction submission, and the final risk checks are enforced by the Comptroller contract on-chain.
 
-- Deposit assets and earn interest
-- Use supplied assets as collateral
-- Borrow other assets
-- Repay loans with accrued interest
-- Interact through a unified router interface
+## Current User-Facing Features
 
-The system is modular and designed for learning, testing, and extension.
+- Wallet connection and Sepolia network validation
+- Dashboard with supplied value, borrowed value, net APY, health factor, positions, and transaction history
+- Markets page with market liquidity, APY, TVL, prices, and cached update time
+- Supply page for selected-market supply, collateral enable/disable, and redeem checks
+- Borrow page for selected-market borrow and repay actions
+- Transaction history panel with cached user activity and Etherscan links
+- Admin page at `/admin`, restricted to the Comptroller admin address
 
----
+## Frontend Pages
 
-## 🧱 Architecture
+### Dashboard
 
-### 🪙 Token Layer
+The dashboard summarises the connected wallet's protocol activity. It uses cached market data and reads user positions across the supported markets to show account-level totals, net APY, and health factor.
 
-#### `CErc20.sol`
-- ERC20-based lending token (cToken)
-- Features:
-  - Supply assets (`mint`)
-  - Redeem assets (`redeem`)
-  - Borrow assets (`borrow`)
-  - Repay loans (`repay`)
-- Integrates with Comptroller for risk checks
+### Markets
 
----
+The markets page displays public protocol data including asset prices, supply APY, borrow APY, total supplied, total borrowed, TVL, and price history. This data is cached for a short period to reduce repeated RPC calls during demonstrations.
 
-#### `CEth.sol`
-- Native ETH version of cToken
-- Uses `payable` for ETH operations
-- Same functionality as `CErc20`, adapted for ETH
+### Supply
 
----
+The supply page reads the selected market, the connected wallet balance, and the user's current position in that market. Before redeeming, the frontend calls the Comptroller's hypothetical liquidity check so the UI reflects the same risk logic used by the smart contracts. Final enforcement still happens on-chain.
 
-#### `CTokenBase.sol`
-- Base contract for all cTokens
-- Handles:
-  - Interest accrual
-  - Account balances
-  - Borrow state tracking
-- Inherited by both `CErc20` and `CEth`
+### Borrow
 
----
+The borrow page reads the selected market, wallet balance, current debt for that market, and global account liquidity from the Comptroller. Before borrowing, it checks whether the proposed borrow would leave enough collateral. Final borrow validation is performed by the Comptroller contract.
 
-### 🏦 Risk Management
+### Transactions
 
-#### `Comptroller.sol`
-- Core risk control contract
-- Responsibilities:
-  - Market listing & management
-  - Liquidity calculation
-  - Borrow and redeem validation
-  - Collateral factor enforcement
+The transactions page shows recent Supply, Withdraw, Borrow, Repay, and collateral events for the connected wallet. Transaction data is cached and includes the latest update time so users can see when the displayed data was refreshed.
 
----
+### Admin
 
-### 📈 Interest Rate Model
+The admin page is not linked from the main navigation and is available only at `/admin`. It checks the connected wallet against `Comptroller.admin()` before rendering controls. The page supports operational contract settings such as market risk parameters, caps, pause controls, reserve factors, interest strategy configuration, close factor, and oracle updates.
 
-#### `JumpRateInterestStrategy.sol`
-- Implements a **jump rate model**
-- Interest rate increases with utilization
-- Sharp increase after a utilization threshold (kink)
+## Smart Contract Architecture
 
-Used for:
-- Borrow rate calculation
-- Supply rate derivation
+### CToken Markets
 
----
+- `CErc20.sol`: ERC20 lending market for mint, redeem, borrow, and repay operations.
+- `CEth.sol`: ETH lending market using payable ETH operations.
+- `CTokenBase.sol`: Shared accounting, interest accrual, supply balances, and borrow balances.
 
-### 🔮 Price Oracle
+### Risk Management
 
-#### `MockPriceOracle.sol`
-- Mock oracle for asset pricing
-- Allows:
-  - Setting asset prices manually
-  - Returning prices for collateral calculations
+- `Comptroller.sol`: Lists markets, validates collateral usage, calculates account liquidity, checks borrow and redeem safety, manages market parameters, and enforces protocol risk controls.
 
----
+### Interest Rate Models
 
-### 🔁 Router Layer
+- `JumpRateInterestStrategy.sol`: Utilisation-based jump rate model with a kink point.
+- `AaveInterestRateStrategy.sol`: Alternative interest rate strategy included for comparison and extension.
 
-#### `Router.sol`
-- User-facing interaction layer
-- Simplifies operations:
-  - Supply
-  - Borrow
-  - Repay
-  - Redeem
+### Price Oracles
 
-**Benefits:**
-- Cleaner frontend integration
-- Reduced interaction complexity
+- `ChainlinkPriceOracle.sol`: Oracle adapter for Chainlink-style price feeds.
+- `MockPriceOracle.sol` and `MockV3Aggregator.sol`: Testing and local demonstration price feeds.
 
----
+### Testing and Mock Assets
 
-### 🧪 Testing & Utilities
+- `MockERC20.sol`: Mintable ERC20 token for testing.
+- `Counter.sol` and `Counter.t.sol`: Basic example contract and Foundry test scaffold.
 
-#### `MockERC20.sol`
-- Mintable ERC20 token for testing
+### Router Contract
 
----
+`Router.sol` is included in the contract folder as an integration helper, but it is not currently exposed as a user-facing frontend feature. The live frontend interacts directly with the market contracts and Comptroller checks.
 
-#### `Counter.sol`
-- Simple example contract
-- Demonstrates basic contract functionality
+## Development Commands
 
----
+Install frontend dependencies:
 
-#### `Counter.t.sol`
-- Foundry test file for `Counter`
-- Demonstrates:
-  - Unit testing
-  - Contract interaction patterns
+```bash
+cd frontend
+npm install
+```
 
----
+Run the frontend:
 
-## 🔄 User Flow
+```bash
+cd frontend
+npm run dev
+```
 
-1. Deposit assets → receive cTokens  
-2. Use assets as collateral  
-3. Borrow other assets  
-4. Interest accrues over time  
-5. Repay or face liquidation (if undercollateralized)
+Build the frontend:
 
----
+```bash
+cd frontend
+npm run build
+```
 
-## ✨ Features
+Run frontend unit tests:
 
-- Modular architecture
-- Supports both ETH and ERC20 markets
-- Pluggable interest rate model
-- Independent risk management (Comptroller)
-- Router abstraction for better UX
-- Fully testable with mock components
+```bash
+cd frontend
+npm test
+```
 
----
+## Notes for Evaluation
 
-## 🧠 Learning Goals
-
-This project is ideal for understanding:
-
-- DeFi lending protocol design
-- Collateralized borrowing mechanics
-- Interest rate modeling
-- Liquidation and risk control
-- Smart contract system architecture
+- Public protocol data is cached to improve stability under RPC rate limits.
+- Supply and Borrow pages deliberately use selected-market reads for faster interaction.
+- Global risk enforcement is performed on-chain by the Comptroller, not by frontend-only calculations.
+- The Admin page is restricted by the actual on-chain admin address.
