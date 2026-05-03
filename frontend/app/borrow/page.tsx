@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useWallet } from "../../context/WalletContext";
 import TxButton from "../../components/TxButton";
+import CryptoIcon from "../../components/CryptoIcon";
 import Toast, { useToast } from "../../components/Toast";
 import {
   fetchMarketData,
@@ -185,7 +186,7 @@ function BorrowInner() {
                 : "text-stone-500 hover:text-stone-800"
             }`}
           >
-            <span className="text-base">{m.icon}</span>
+            <CryptoIcon symbol={m.symbol} size={18} />
             {m.symbol}
           </button>
         ))}

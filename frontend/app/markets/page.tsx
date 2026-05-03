@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useWallet } from "../../context/WalletContext";
 import MarketCard from "../../components/MarketCard";
+import CryptoIcon from "../../components/CryptoIcon";
 import MarketPriceChart, { type PurchaseMarker } from "../../components/MarketPriceChart";
 import {
   fetchCachedAllMarkets,
@@ -241,8 +242,8 @@ function MarketDetail({
       <MarketPriceChart marketData={data} priceHistory={history} markers={markers} />
       <div className="card p-5">
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center font-display text-lg text-stone-600">
-            {data.market.icon}
+          <div className="w-10 h-10 rounded-full bg-stone-50 flex items-center justify-center">
+            <CryptoIcon symbol={data.market.symbol} size={30} />
           </div>
           <div>
             <div className="font-medium text-stone-800">{data.market.symbol}</div>

@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "../context/WalletContext";
+import CryptoIcon from "../components/CryptoIcon";
 
 const MARKETS = [
   { symbol: "ETH",  name: "Ether",           icon: "Ξ", supplyAPY: "1.82%", borrowAPY: "3.45%", color: "#6366f1", bg: "#eef2ff" },
@@ -210,8 +211,8 @@ export default function LandingPage() {
             {MARKETS.map((m) => (
               <HoverCard key={m.symbol} style={s.mcard}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-                  <div style={{ width: 42, height: 42, borderRadius: "50%", background: m.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Serif Display', serif", fontSize: "1.2rem", color: m.color }}>
-                    {m.icon}
+                  <div style={{ width: 42, height: 42, borderRadius: "50%", background: m.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <CryptoIcon symbol={m.symbol} size={28} />
                   </div>
                   <div>
                     <div style={{ fontWeight: 600, color: "#1c1917" }}>{m.symbol}</div>

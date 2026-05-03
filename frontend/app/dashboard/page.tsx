@@ -1,8 +1,9 @@
 "use client";
 // app/page.tsx — Dashboard
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import TransactionHistoryPanel from "../../components/TransactionHistoryPanel";
+import CryptoIcon from "../../components/CryptoIcon";
 import { useWallet } from "../../context/WalletContext";
 import {
   fetchCachedAllMarkets,
@@ -164,6 +165,11 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Supply Allocation Donut Chart */}
+          {!loading && summary && summary.totalSuppliedUSD > 0 && (
+            <SupplyDonutChart summary={summary} />
+          )}
+
           <div className="card overflow-hidden">
             <div className="px-5 py-3 border-b border-stone-100">
               <span className="font-medium text-sm text-stone-700">Your Positions</span>
@@ -191,8 +197,8 @@ export default function Dashboard() {
                           !hasActivity ? "opacity-40" : ""
                         }`}
                       >
-                        <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-600 font-display">
-                          {pos.market.icon}
+                        <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center">
+                          <CryptoIcon symbol={pos.market.symbol} size={24} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm text-stone-800">
@@ -258,6 +264,100 @@ function formatUpdatedAt(timestamp: number): string {
     minute: "2-digit",
     second: "2-digit",
   }).format(new Date(timestamp));
+}
+
+// ── Supply Donut Chart ───────────────────────────────────────────
+const DONUT_COLORS = ["#10b981", "#f59e0b", "#6366f1", "#ec4899", "#0ea5e9", "#8b5cf6"];
+
+function SupplyDonutChart({ summary }: { summary: AccountSummary }) {
+  const slices = useMemo(() => {
+    const supplied = summary.positions
+      .filter((p) => p.supplyBalanceUSD > 0)
+      .map((p, i) => ({
+        symbol: p.market.symbol,
+        valueUSD: p.supplyBalanceUSD,
+        color: DONUT_COLORS[i % DONUT_COLORS.length],
+      }));
+    const total = supplied.reduce((s, x) => s + x.valueUSD, 0);
+    let cumulative = 0;
+    return supplied.map((s) => {
+      const pct = total > 0 ? s.valueUSD / total : 0;
+      const start = cumulative;
+      cumulative += pct;
+      return { ...s, pct, start, end: cumulative, total };
+    });
+  }, [summary]);
+
+  if (slices.length === 0) return null;
+
+  const SIZE = 180;
+  const STROKE = 26;
+  const R = (SIZE - STROKE) / 2;
+  const C = 2 * Math.PI * R;
+  const CENTER = SIZE / 2;
+  const HALO = 12;
+  const SVG_SIZE = SIZE + HALO * 2;
+  const SVG_CENTER = SVG_SIZE / 2;
+
+  return (
+    <div className="card p-5 mb-6">
+      <div className="font-medium text-sm text-stone-700 mb-4">Supply Allocation</div>
+      <div className="flex items-center justify-center gap-10">
+        {/* Donut with halo */}
+        <div className="relative shrink-0" style={{ width: SVG_SIZE, height: SVG_SIZE }}>
+          <svg viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`} width={SVG_SIZE} height={SVG_SIZE}>
+            <defs>
+              <filter id="donut-halo" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
+                <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.25 0" result="glow" />
+                <feMerge>
+                  <feMergeNode in="glow" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <g filter="url(#donut-halo)">
+              {/* Background ring */}
+              <circle cx={SVG_CENTER} cy={SVG_CENTER} r={R} fill="none" stroke="#f5f5f4" strokeWidth={STROKE} />
+              {/* Slices */}
+              {slices.map((s, i) => (
+                <circle
+                  key={i}
+                  cx={SVG_CENTER}
+                  cy={SVG_CENTER}
+                  r={R}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth={STROKE}
+                  strokeDasharray={`${s.pct * C} ${C}`}
+                  strokeDashoffset={-s.start * C}
+                  strokeLinecap="butt"
+                  transform={`rotate(-90 ${SVG_CENTER} ${SVG_CENTER})`}
+                />
+              ))}
+            </g>
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div className="text-xs text-stone-400">Total</div>
+            <div className="font-mono text-sm font-medium text-stone-700">{formatUSD(slices[0]?.total ?? 0)}</div>
+          </div>
+        </div>
+
+        {/* Legend — stacked rows on right */}
+        <div className="flex flex-col gap-3">
+          {slices.map((s, i) => (
+            <div key={i} className="flex items-center gap-2 text-sm">
+              <span className="w-3 h-3 rounded-full shrink-0" style={{ background: s.color }} />
+              <span className="text-stone-700">
+                <span className="font-medium">{s.symbol}</span>
+                <span className="text-stone-400 text-xs ml-1">({(s.pct * 100).toFixed(1)}%)</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SummaryCard({

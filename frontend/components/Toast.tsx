@@ -44,7 +44,7 @@ export default function Toast({
           <p>{message}</p>
           {txHash && (
             <a
-              href={`${process.env.NEXT_PUBLIC_EXPLORER_URL}/tx/${txHash}`}
+              href={`https://sepolia.etherscan.io/tx/${txHash}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs underline opacity-75 mt-1 inline-block"
