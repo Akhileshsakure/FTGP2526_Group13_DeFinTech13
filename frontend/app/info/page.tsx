@@ -1,6 +1,7 @@
 "use client";
 // app/info/page.tsx — Protocol Info & FAQ
 import { useState, useMemo } from "react";
+import { ADDRESSES } from "../../lib/contracts";
 
 interface FAQItem {
   question: string;
@@ -224,16 +225,16 @@ export default function InfoPage() {
         <h2 className="font-display text-xl text-stone-800 mb-4">Useful Links</h2>
         <div className="grid sm:grid-cols-2 gap-3">
           <a
-            href="https://sepolia.etherscan.io"
+            href={`https://sepolia.etherscan.io/address/${ADDRESSES.comptroller}`}
             target="_blank"
             rel="noopener noreferrer"
             className="card p-4 hover:shadow-md transition-shadow group"
           >
             <div className="font-medium text-stone-800 mb-1 group-hover:text-emerald-700">
-              Sepolia Etherscan
+              View on Sepolia Etherscan
             </div>
             <div className="text-xs text-stone-500">
-              View transactions, contract code, and on-chain state.
+              View the Comptroller contract, transactions, and on-chain state.
             </div>
           </a>
           <a

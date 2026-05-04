@@ -10,15 +10,19 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "../context/WalletContext";
 import CryptoIcon from "../components/CryptoIcon";
+import { ADDRESSES } from "../lib/contracts";
 
 const MARKETS = [
   { symbol: "ETH",  name: "Ether",           icon: "Ξ", supplyAPY: "1.82%", borrowAPY: "3.45%", color: "#6366f1", bg: "#eef2ff" },
   { symbol: "USDC", name: "USD Coin",         icon: "$", supplyAPY: "3.21%", borrowAPY: "5.88%", color: "#0ea5e9", bg: "#f0f9ff" },
   { symbol: "DAI",  name: "Dai Stablecoin",   icon: "◈", supplyAPY: "2.97%", borrowAPY: "5.12%", color: "#f59e0b", bg: "#fffbeb" },
+  { symbol: "WBTC", name: "Wrapped Bitcoin",   icon: "B", supplyAPY: "0.45%", borrowAPY: "2.10%", color: "#f97316", bg: "#fff7ed" },
+  { symbol: "WETH", name: "Wrapped Ether",     icon: "W", supplyAPY: "1.65%", borrowAPY: "3.20%", color: "#8b5cf6", bg: "#f5f3ff" },
+  { symbol: "USDT", name: "Tether USD",        icon: "T", supplyAPY: "3.05%", borrowAPY: "5.50%", color: "#22c55e", bg: "#f0fdf4" },
 ];
 
 const STEPS = [
-  { number: "01", title: "Supply Assets",       desc: "Deposit ETH, USDC, or DAI into the protocol. Earn interest from the moment you supply.", color: "#10b981", bg: "#ecfdf5" },
+  { number: "01", title: "Supply Assets",       desc: "Deposit ETH, USDC, DAI, WBTC, WETH, or USDT into the protocol. Earn interest from the moment you supply.", color: "#10b981", bg: "#ecfdf5" },
   { number: "02", title: "Use as Collateral",   desc: "Enable your supplied assets as collateral. The Comptroller manages risk automatically.", color: "#6366f1", bg: "#eef2ff" },
   { number: "03", title: "Borrow & Repay",      desc: "Borrow any listed asset against your collateral. Repay anytime with accrued interest.",  color: "#f59e0b", bg: "#fffbeb" },
 ];
@@ -153,7 +157,7 @@ export default function LandingPage() {
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <Btn label={btnLabel} onClick={handleConnect} size="lg" disabled={isConnecting} />
             <a
-              href="https://sepolia.etherscan.io" target="_blank" rel="noopener noreferrer"
+              href={`https://sepolia.etherscan.io/address/${ADDRESSES.comptroller}`} target="_blank" rel="noopener noreferrer"
               style={{ padding: "14px 32px", borderRadius: 10, background: "white", color: "#44403c", border: "1px solid #e7e5e4", fontFamily: "'DM Sans', sans-serif", fontWeight: 500, fontSize: "1rem", cursor: "pointer", textDecoration: "none" }}
             >
               View on Etherscan ↗
@@ -166,16 +170,24 @@ export default function LandingPage() {
       {/* ── STATS BAR ─────────────────────────────────────────── */}
       <section style={{ borderBottom: "1px solid #e7e5e4", background: "white" }}>
         <div style={{ ...s.wrap, display: "grid", gridTemplateColumns: "repeat(3,1fr)" }}>
-          {[
-            { label: "Markets",           value: "3" },
-            { label: "Supported Assets",  value: "ETH · USDC · DAI" },
-            { label: "Network",           value: "Ethereum Sepolia" },
-          ].map((stat, i) => (
-            <div key={i} style={{ padding: "28px 24px", textAlign: "center", borderRight: i < 2 ? "1px solid #e7e5e4" : "none" }}>
-              <div style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "1.75rem", color: "#1c1917", marginBottom: 4 }}>{stat.value}</div>
-              <div style={s.eyebrow}>{stat.label}</div>
+          <div style={{ padding: "28px 24px", textAlign: "center", borderRight: "1px solid #e7e5e4" }}>
+            <div style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "1.75rem", color: "#1c1917", marginBottom: 4 }}>6</div>
+            <div style={s.eyebrow}>Markets</div>
+          </div>
+          <div style={{ padding: "28px 24px", textAlign: "center", borderRight: "1px solid #e7e5e4" }}>
+            <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 6 }}>
+              {["ETH", "USDC", "DAI", "WBTC", "WETH", "USDT"].map((sym) => (
+                <div key={sym} style={{ width: 32, height: 32, borderRadius: "50%", background: "#f5f5f4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <CryptoIcon symbol={sym} size={20} />
+                </div>
+              ))}
             </div>
-          ))}
+            <div style={s.eyebrow}>Supported Assets</div>
+          </div>
+          <div style={{ padding: "28px 24px", textAlign: "center" }}>
+            <div style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "1.75rem", color: "#1c1917", marginBottom: 4 }}>Ethereum Sepolia</div>
+            <div style={s.eyebrow}>Network</div>
+          </div>
         </div>
       </section>
 
