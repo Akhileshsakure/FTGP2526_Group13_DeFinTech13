@@ -7,7 +7,8 @@
     "test": "hardhat test",
     "test:report": "hardhat test > test-results/hardhat-test-results.txt 2>&1",
     "deploy:mock": "hardhat run scripts/deploy.ts --network sepolia",
-    "deploy:chainlink": "hardhat run scripts/deploy-chainlink.ts --network sepolia"
+    "deploy:chainlink": "hardhat run scripts/deploy-chainlink.ts --network sepolia",
+    "oracle:chainlink": "hardhat run scripts/connect-chainlink-oracle.ts --network sepolia"
   },
   "keywords": [],
   "author": "",
