@@ -176,7 +176,7 @@ export default function Dashboard() {
             </div>
             <div className="divide-y divide-stone-100">
               {loading
-                ? [1, 2, 3].map((i) => (
+                ? [1, 2, 3, 4, 5, 6].map((i) => (
                     <div key={i} className="px-5 py-4 flex items-center gap-4">
                       <div className="skeleton w-8 h-8 rounded-full" />
                       <div className="flex-1">
