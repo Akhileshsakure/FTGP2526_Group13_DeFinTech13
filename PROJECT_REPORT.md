@@ -294,7 +294,7 @@ The project can be tested locally from the project root directory. The tests do 
 1. Open a terminal in the project root:
 
 ```bash
-cd "C:\Users\tangc\Desktop\FTGP2526_Group13_DeFinTech13-frontend-integration - 副本"
+cd "C:\Users\tangc\Desktop\FTGP2526_Group13_DeFinTech13-frontend-integration - copy"
 ```
 
 2. Install dependencies if needed:
