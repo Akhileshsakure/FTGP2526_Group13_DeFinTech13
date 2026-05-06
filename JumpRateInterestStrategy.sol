@@ -11,21 +11,21 @@ interface IInterestRateStrategyLike {
 
 /**
  * @title JumpRateInterestStrategy
- * @notice jump interest rate（charge in seconds）
+ * Code comment
  *
- * interest rate model：
+ * Interest Rate Model:
  *
  * utilization = totalBorrows / (cash + totalBorrows - totalReserves)
  *
- * when utilization <= kink:
+ * When utilization <= kink:
  *   borrowRate = baseRatePerSecond + utilization * multiplierPerSecond
  *
- * when utilization > kink:
+ * When utilization > kink:
  *   normalRate = baseRatePerSecond + kink * multiplierPerSecond
  *   excessUtil = utilization - kink
  *   borrowRate = normalRate + excessUtil * jumpMultiplierPerSecond
  *
- * 
+ * All parameters use 1e18 precision
  */
 contract JumpRateInterestStrategy is IInterestRateStrategyLike {
     uint256 public constant WAD = 1e18;
@@ -33,7 +33,7 @@ contract JumpRateInterestStrategy is IInterestRateStrategyLike {
 
     address public owner;
 
-    // annual default value (1e18)
+    // Annualized parameters (1e18 precision)
     uint256 public baseRatePerYear;
     uint256 public multiplierPerYear;
     uint256 public jumpMultiplierPerYear;
@@ -113,7 +113,7 @@ contract JumpRateInterestStrategy is IInterestRateStrategyLike {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice get currently interest rate，1e18 
+     * @notice Current utilization rate, 1e18 precision
      * @dev utilization = borrows / (cash + borrows - reserves)
      */
     function utilizationRate(
@@ -146,7 +146,7 @@ contract JumpRateInterestStrategy is IInterestRateStrategyLike {
     }
 
     /**
-     * @notice return currently interest rate（/seconds，1e18 ）
+     * @notice Returns current borrow rate per second (1e18 precision)
      */
     function getBorrowRate(
         uint256 cash,
