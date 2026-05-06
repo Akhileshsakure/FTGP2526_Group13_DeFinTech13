@@ -75,7 +75,7 @@ contract AaveInterestRateStrategy is IInterestRateStrategyLike {
     }
 
     /*//////////////////////////////////////////////////////////////
-                             ADMIN权限设置
+                             ADMIN
     //////////////////////////////////////////////////////////////*/
 
     function transferOwnership(address newOwner) external onlyOwner {
@@ -107,7 +107,7 @@ contract AaveInterestRateStrategy is IInterestRateStrategyLike {
     }
 
     /*//////////////////////////////////////////////////////////////
-                                VIEW HELPERS函数
+                                VIEW HELPERS
     //////////////////////////////////////////////////////////////*/
 
     /**
